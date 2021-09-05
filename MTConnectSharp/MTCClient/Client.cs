@@ -112,7 +112,10 @@ namespace MTConnectSharp
          {
             Resource = "current"
          };
-         _restClient.ExecuteAsync(request, (a) => ParseStream(a));
+
+         request.AddHeader("Accept", "application/xml");
+         var result = _restClient.ExecuteGetAsync(request).Result;
+         ParseStream(result);
 		}
 
 		/// <summary>
@@ -136,17 +139,19 @@ namespace MTConnectSharp
          };
 
          try
-			{
+         {
             _probeStarted = true;
-				_restClient.ExecuteAsync(request, r => ParseProbeResponse(r));
-			}
-			catch (Exception ex)
-			{
+            request.AddHeader("Accept", "application/xml");
+            var result = _restClient.ExecuteGetAsync(request).Result; 
+            ParseProbeResponse(result);
+         }
+         catch (Exception ex)
+         {
             _probeStarted = false;
             throw new Exception("Probe request failed.\nAgent Uri: " + AgentUri, ex);
-         }
-      }
-
+         } 
+		}
+		
 		/// <summary>
 		/// Parses IRestResponse from a probe command into a Device collection
 		/// </summary>
