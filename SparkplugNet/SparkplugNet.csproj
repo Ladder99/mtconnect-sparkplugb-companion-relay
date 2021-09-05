@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SparkplugNet</AssemblyName>
+    <RootNamespace>SparkplugNet</RootNamespace>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageId>SparkplugNet</PackageId>
+    <Authors>SeppPenner</Authors>
+    <Company>Hämmer Electronics</Company>
+    <Copyright>Copyright © Hämmer Electronics</Copyright>
+    <Description>SparkplugNet is a library to use the Sparkplug IIoT standard in .Net.</Description>
+    <PackageTags>c# csharp sparkplug mqtt</PackageTags>
+    <PackageProjectUrl>https://www.nuget.org/packages/SparkplugNet/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SeppPenner/SparkplugNet</RepositoryUrl>
+    <PackageIcon>Icon.png</PackageIcon>
+    <RepositoryType>Github</RepositoryType>
+    <PackageReleaseNotes>Version 0.4.0.0 (2021-09-01): 0.4 beta release (Fixed conversion issues between internal and external data formats, adjusted tests, updated how to use section and example project, fixed not accessible callback functions).</PackageReleaseNotes>
+    <PackageLicenseFile>License.txt</PackageLicenseFile>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <TargetFramework>net5.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <OutputPath>../bin/Debug/net5.0/</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <OutputPath>../bin/Release/net5.0/</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MQTTnet" Version="3.0.16" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="protobuf-net" Version="3.0.101" />
+    <PackageReference Include="Serilog" Version="2.11.0-dev-01367" />
+  </ItemGroup>
+
+</Project>
