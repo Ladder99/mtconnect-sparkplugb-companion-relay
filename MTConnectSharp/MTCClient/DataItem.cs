@@ -53,7 +53,7 @@ namespace MTConnectSharp
 		{
 			get
 			{
-            return _dataItemSamples.Skip(Math.Max(1, _dataItemSamples.Count - 1)).FirstOrDefault();
+				return _dataItemSamples.Skip(Math.Max(1, _dataItemSamples.Count - 2)).FirstOrDefault();
 			}
 		}
 
@@ -83,9 +83,9 @@ namespace MTConnectSharp
 		/// <param name="xmlDataItem">The XElement which defines the DataItem</param>
 		internal DataItem(XElement xmlDataItem)
 		{
-         SampleHistory = new ReadOnlyObservableCollection<DataItemSample>(_dataItemSamples);
+			SampleHistory = new ReadOnlyObservableCollection<DataItemSample>(_dataItemSamples);
 
-         BufferSize = 100;
+			BufferSize = 100;
 			Id = ParseUtility.GetAttribute(xmlDataItem, "id");
 			Name = ParseUtility.GetAttribute(xmlDataItem, "name");
 			Category = ParseUtility.GetAttribute(xmlDataItem, "category");
@@ -102,7 +102,7 @@ namespace MTConnectSharp
 		internal void AddSample(DataItemSample newSample)
 		{
 			_dataItemSamples.Add(newSample);
-         _dataItemSamples.RemoveRange(0, Math.Max(0, _dataItemSamples.Count - BufferSize));
+			_dataItemSamples.RemoveRange(0, Math.Max(0, _dataItemSamples.Count - BufferSize));
 		}
 	}
 }

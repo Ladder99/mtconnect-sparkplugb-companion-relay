@@ -15,7 +15,7 @@ namespace mtc_spb_relay
                     .WriteTo.Console()
                     .CreateLogger();
 
-                var mtc = new mtc_test();
+                var mtc = new MTCClient();
                 mtc.Run();
                 
                 //var spb = new spb_test();

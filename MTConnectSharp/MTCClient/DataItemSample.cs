@@ -16,6 +16,8 @@ namespace MTConnectSharp
 		/// The timestamp of the sample
 		/// </summary>
 		public DateTime TimeStamp { get; set; }
+		
+		public long Sequence { get; set; }
 
 		/// <summary>
 		/// Creates a new sample with the current time as the timestamp
@@ -36,6 +38,13 @@ namespace MTConnectSharp
 		{
 			TimeStamp = timestamp;
 			Value = value;
+		}
+		
+		internal DataItemSample(string value, DateTime timestamp, long sequence)
+		{
+			TimeStamp = timestamp;
+			Value = value;
+			Sequence = sequence;
 		}
 
 		/// <summary>

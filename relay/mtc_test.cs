@@ -3,17 +3,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
-using System.Net.Mime;
-using System.Reflection.Emit;
 
 namespace mtc_spb_relay
 {
     public class mtc_test
     { 
        HashSet<INotifyCollectionChanged> Registered = new HashSet<INotifyCollectionChanged>();
-
-      static Dictionary<Type, Action<object>> Hellos = new Dictionary<Type, Action<object>>();
-      static Dictionary<Type, Action<object>> Goodbyes = new Dictionary<Type, Action<object>>();
+       Dictionary<Type, Action<object>> Hellos = new Dictionary<Type, Action<object>>();
+       Dictionary<Type, Action<object>> Goodbyes = new Dictionary<Type, Action<object>>();
 
       void AddHelloGoodbye<T>(Action<T> hello, Action<T> goodbye)
       {
@@ -41,7 +38,10 @@ namespace mtc_spb_relay
                      {
                         foreach (T item in info.NewItems)
                         {
-                           Hellos[typeof(T)](item);
+                           //Hellos[typeof(T)](item);
+
+                           var h = Hellos[typeof(T)];
+                           h(item);
                         }
                      }
                      if (info.OldItems != null)

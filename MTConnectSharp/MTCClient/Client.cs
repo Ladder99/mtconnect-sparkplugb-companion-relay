@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Timers;
@@ -18,6 +19,12 @@ namespace MTConnectSharp
 		/// The probe response has been recieved and parsed
 		/// </summary>
 		public event EventHandler ProbeCompleted;
+
+		public event EventHandler GetCurrentCompleted;
+		
+		public event EventHandler GetSampleCompleted;
+
+		public event EventHandler DataItemChanged;
 
 		/// <summary>
 		/// The base uri of the agent
@@ -58,9 +65,20 @@ namespace MTConnectSharp
 		/// Last sequence number read from current or sample
 		/// </summary>
 		private long _lastSequence;
+		
+		public long LastSequence
+		{
+			get => _lastSequence; 
+		}
 
 		private bool _probeStarted = false;
 		private bool _probeCompleted = false;
+		
+		private bool _currentStarted = false;
+		private bool _currentCompleted = false;
+		
+		private bool _sampleStarted = false;
+		private bool _sampleCompleted = false;
 
 		/// <summary>
 		/// Initializes a new Client 
@@ -108,14 +126,29 @@ namespace MTConnectSharp
 				throw new InvalidOperationException("Cannot get DataItem values. Agent has not been probed yet.");
 			}
 
+			if (_currentStarted && !_currentCompleted)
+			{
+				throw new InvalidOperationException("Cannot start a new Current when one is still running.");
+			}
+			
 			var request = new RestRequest
 			{
 				Resource = "current"
 			};
 
-			request.AddHeader("Accept", "application/xml");
-			var result = _restClient.ExecuteGetAsync(request).Result;
-			ParseStream(result);
+			try
+			{
+				_currentStarted = true;
+				request.AddHeader("Accept", "application/xml");
+				var result = _restClient.ExecuteGetAsync(request).Result;
+				ParseCurrentResponse(result);
+			}
+			catch (Exception ex)
+			{
+				_currentStarted = false;
+				throw new Exception("Current request failed.\nAgent Uri: " + AgentUri, ex);
+			} 
+			
 		}
 
 		/// <summary>
@@ -214,12 +247,43 @@ namespace MTConnectSharp
 				Resource = "sample"
 			};
 			
-			request.AddParameter("at", _lastSequence + 1);
-			request.AddHeader("Accept", "application/xml");
-			var result = _restClient.ExecuteGetAsync(request).Result;
-			ParseStream(result);
+			try
+			{
+				_sampleStarted = true;
+				request.AddParameter("at", _lastSequence + 1);
+				request.AddHeader("Accept", "application/xml");
+				var result = _restClient.ExecuteGetAsync(request).Result;
+				ParseStream(result);
+				GetSampleCompletedHandler();
+			}
+			catch (Exception ex)
+			{
+				_sampleStarted = false;
+				throw new Exception("Sample request failed.\nAgent Uri: " + AgentUri, ex);
+			} 
 		}
 
+		private void ParseCurrentResponse(IRestResponse response)
+		{
+			ParseStream(response);
+			_currentCompleted = true;
+			_currentStarted = false;
+			GetCurrentCompletedHandler();
+		}
+		
+		public class DataChangedEventArgs: EventArgs
+		{
+			public long StartingSequence { get; set; }
+			
+			public long EndingSequence { get; set; }
+			public Dictionary<string,DataItem> DataItems { get; set; }
+
+			public DataChangedEventArgs()
+			{
+				DataItems = new Dictionary<string, DataItem>();
+			}
+		}
+		
 		/// <summary>
 		/// Parses response from a current or sample request, updates changed data items and fires events
 		/// </summary>
@@ -228,31 +292,48 @@ namespace MTConnectSharp
 		{
 			using (StringReader sr = new StringReader(response.Content))
 			{
+				bool sequenceChanged = false;
+				
 				var xdoc = XDocument.Load(sr);
 
-				_lastSequence = Convert.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
+				var currentSequence = Convert.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
 					.Attribute("lastSequence").Value);
+
+				if (currentSequence != _lastSequence)
+					sequenceChanged = true;
+				
+				DataChangedEventArgs args = new DataChangedEventArgs();
+				args.StartingSequence = _lastSequence;
+				args.EndingSequence = currentSequence;
+				
+				_lastSequence = currentSequence;
 
 				var xmlDataItems = xdoc.Descendants()
 					.Where(e => e.Attributes().Any(a => a.Name.LocalName == "dataItemId"));
 	            
 				if (xmlDataItems.Any())
-	            {
+				{
 					var dataItems = xmlDataItems.Select(e => new {
 						id = e.Attribute("dataItemId").Value,
 						timestamp = DateTime.Parse(e.Attribute("timestamp").Value, null, 
 							System.Globalization.DateTimeStyles.RoundtripKind),
-						value = e.Value
+						value = e.Value,
+						sequence = long.Parse(e.Attribute("sequence").Value)
 					})
-	               .OrderBy(i => i.timestamp)
+	               .OrderBy(i => i.sequence)
 	               .ToList();
 
 	               foreach (var item in dataItems)
 	               {
 	                  var dataItem = _dataItemsDictionary[item.id];
-	                  var sample = new DataItemSample(item.value.ToString(), item.timestamp);
+	                  var sample = new DataItemSample(item.value.ToString(), item.timestamp, item.sequence);
 	                  dataItem.AddSample(sample);
+	                  
+	                  if(!args.DataItems.ContainsKey(dataItem.Id))
+						args.DataItems.Add(dataItem.Id, dataItem);
 	               }
+
+	               if(sequenceChanged) DataItemChanged?.Invoke(this, args);
 				}
 			}
 		}
@@ -260,6 +341,16 @@ namespace MTConnectSharp
 		private void ProbeCompletedHandler()
 		{
 			ProbeCompleted?.Invoke(this, new EventArgs());
+		}
+		
+		private void GetCurrentCompletedHandler()
+		{
+			GetCurrentCompleted?.Invoke(this, new EventArgs());
+		}
+		
+		private void GetSampleCompletedHandler()
+		{
+			GetSampleCompleted?.Invoke(this, new EventArgs());
 		}
 
 		/// <summary>
