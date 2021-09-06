@@ -13,16 +13,16 @@ namespace MTConnectSharp
    /// Connects to a single agent and streams data from it.
    /// </summary>
    public class MTConnectClient : IMTConnectClient, IDisposable
-    {
+   {
 		/// <summary>
 		/// The probe response has been recieved and parsed
 		/// </summary>
 		public event EventHandler ProbeCompleted;
 
-      /// <summary>
-      /// The base uri of the agent
-      /// </summary>
-      public string AgentUri { get; set; }
+		/// <summary>
+		/// The base uri of the agent
+		/// </summary>
+		public string AgentUri { get; set; }
 
 		/// <summary>
 		/// Time in milliseconds between sample queries when simulating a streaming connection
@@ -34,8 +34,8 @@ namespace MTConnectSharp
 		/// </summary>
 		public ReadOnlyObservableCollection<Device> Devices
 		{
-         get;
-         private set;
+			get;
+			private set;
 		}
 		private ObservableCollection<Device> _devices;
 
@@ -59,8 +59,8 @@ namespace MTConnectSharp
 		/// </summary>
 		private long _lastSequence;
 
-      private bool _probeStarted = false;
-      private bool _probeCompleted = false;
+		private bool _probeStarted = false;
+		private bool _probeCompleted = false;
 
 		/// <summary>
 		/// Initializes a new Client 
@@ -69,8 +69,8 @@ namespace MTConnectSharp
 		{
 			UpdateInterval = TimeSpan.FromMilliseconds(2000);
 
-         _devices = new ObservableCollection<Device>();
-         Devices = new ReadOnlyObservableCollection<Device>(_devices);
+			_devices = new ObservableCollection<Device>();
+			Devices = new ReadOnlyObservableCollection<Device>(_devices);
 		}
 
 		/// <summary>
@@ -108,14 +108,14 @@ namespace MTConnectSharp
 				throw new InvalidOperationException("Cannot get DataItem values. Agent has not been probed yet.");
 			}
 
-         var request = new RestRequest
-         {
-            Resource = "current"
-         };
+			var request = new RestRequest
+			{
+				Resource = "current"
+			};
 
-         request.AddHeader("Accept", "application/xml");
-         var result = _restClient.ExecuteGetAsync(request).Result;
-         ParseStream(result);
+			request.AddHeader("Accept", "application/xml");
+			var result = _restClient.ExecuteGetAsync(request).Result;
+			ParseStream(result);
 		}
 
 		/// <summary>
@@ -123,33 +123,33 @@ namespace MTConnectSharp
 		/// </summary>
 		public void Probe()
 		{
-         if (_probeStarted && !_probeCompleted)
-         {
-            throw new InvalidOperationException("Cannot start a new Probe when one is still running.");
-         }
+			if (_probeStarted && !_probeCompleted)
+			{
+				throw new InvalidOperationException("Cannot start a new Probe when one is still running.");
+			}
 
-         _restClient = new RestClient
-         {
-            BaseUrl = new Uri(AgentUri)
-         };
+			_restClient = new RestClient
+			{
+				BaseUrl = new Uri(AgentUri)
+			};
 
-         var request = new RestRequest
-         {
-            Resource = "probe"
-         };
+			var request = new RestRequest
+			{
+				Resource = "probe"
+			};
 
-         try
-         {
-            _probeStarted = true;
-            request.AddHeader("Accept", "application/xml");
-            var result = _restClient.ExecuteGetAsync(request).Result; 
-            ParseProbeResponse(result);
-         }
-         catch (Exception ex)
-         {
-            _probeStarted = false;
-            throw new Exception("Probe request failed.\nAgent Uri: " + AgentUri, ex);
-         } 
+			try
+			{
+				_probeStarted = true;
+				request.AddHeader("Accept", "application/xml");
+				var result = _restClient.ExecuteGetAsync(request).Result; 
+				ParseProbeResponse(result);
+			}
+			catch (Exception ex)
+			{
+				_probeStarted = false;
+				throw new Exception("Probe request failed.\nAgent Uri: " + AgentUri, ex);
+			} 
 		}
 		
 		/// <summary>
@@ -158,20 +158,22 @@ namespace MTConnectSharp
 		/// <param name="response">An IRestResponse from a probe command</param>
 		private void ParseProbeResponse(IRestResponse response)
 		{
-         var xdoc = XDocument.Load(new StringReader(response.Content));
-         if (_devices.Any())
-            _devices.Clear();
+			var xdoc = XDocument.Load(new StringReader(response.Content));
+			if (_devices.Any())
+				_devices.Clear();
 
-         _devices.AddRange(xdoc.Descendants()
-            .Where(d => d.Name.LocalName == "Devices")
-            .Take(1) // needed? 
-            .SelectMany(d => d.Elements())
-            .Select(d => new Device(d)));
+			var devices = xdoc.Descendants()
+				.Where(d => d.Name.LocalName == "Devices")
+				.Take(1) // needed? 
+				.SelectMany(d => d.Elements())
+				.Select(d => new Device(d));
+			
+			_devices.AddRange(devices);
 
-         BuildDataItemDictionary();
+			BuildDataItemDictionary();
 
 			_probeCompleted = true;
-         _probeStarted = false;
+			_probeStarted = false;
 			ProbeCompletedHandler();			
 		}
 
@@ -180,9 +182,9 @@ namespace MTConnectSharp
 		/// </summary>
 		private void BuildDataItemDictionary()
 		{
-         _dataItemsDictionary = _devices.SelectMany(d =>
-            d.DataItems.Concat(GetAllDataItems(d.Components))
-         ).ToDictionary(i => i.Id, i => i);
+			_dataItemsDictionary = _devices.SelectMany(d =>
+				d.DataItems.Concat(GetAllDataItems(d.Components))
+			).ToDictionary(i => i.Id, i => i);
 		}
 
 		/// <summary>
@@ -192,26 +194,30 @@ namespace MTConnectSharp
 		/// <returns>Collection of DataItems from passed Component collection</returns>
 		private static List<DataItem> GetAllDataItems(IReadOnlyList<Component> components)
 		{
-         var queue = new Queue<Component>(components);
+			var queue = new Queue<Component>(components);
 			var dataItems = new List<DataItem>();
 			while(queue.Count > 0)
 			{
-            var component = queue.Dequeue();
-            foreach (var c in component.Components)
-               queue.Enqueue(c);
-            dataItems.AddRange(component.DataItems);
+				var component = queue.Dequeue();
+				foreach (var c in component.Components)
+				   queue.Enqueue(c);
+				dataItems.AddRange(component.DataItems);
 			}
+			
 			return dataItems;
 		}
 
 		private void StreamingTimerElapsed(object sender, ElapsedEventArgs e)
 		{
-         var request = new RestRequest
-         {
-            Resource = "sample"
-         };
-         request.AddParameter("at", _lastSequence + 1);
-			_restClient.ExecuteAsync(request, r => ParseStream(r));
+			var request = new RestRequest
+			{
+				Resource = "sample"
+			};
+			
+			request.AddParameter("at", _lastSequence + 1);
+			request.AddHeader("Accept", "application/xml");
+			var result = _restClient.ExecuteGetAsync(request).Result;
+			ParseStream(result);
 		}
 
 		/// <summary>
@@ -220,37 +226,38 @@ namespace MTConnectSharp
 		/// <param name="response">IRestResponse from the MTConnect request</param>
 		private void ParseStream(IRestResponse response)
 		{
-         using (StringReader sr = new StringReader(response.Content))
-         {
-            var xdoc = XDocument.Load(sr);
+			using (StringReader sr = new StringReader(response.Content))
+			{
+				var xdoc = XDocument.Load(sr);
 
-            _lastSequence = Convert.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
-               .Attribute("lastSequence").Value);
+				_lastSequence = Convert.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
+					.Attribute("lastSequence").Value);
 
-            var xmlDataItems = xdoc.Descendants()
-               .Where(e => e.Attributes().Any(a => a.Name.LocalName == "dataItemId"));
-            if (xmlDataItems.Any())
-            {
-               var dataItems = xmlDataItems.Select(e => new {
-                  id = e.Attribute("dataItemId").Value,
-                  timestamp = DateTime.Parse(e.Attribute("timestamp").Value, null, 
-                     System.Globalization.DateTimeStyles.RoundtripKind),
-                  value = e.Value
-               })
-               .OrderBy(i => i.timestamp)
-               .ToList();
+				var xmlDataItems = xdoc.Descendants()
+					.Where(e => e.Attributes().Any(a => a.Name.LocalName == "dataItemId"));
+	            
+				if (xmlDataItems.Any())
+	            {
+					var dataItems = xmlDataItems.Select(e => new {
+						id = e.Attribute("dataItemId").Value,
+						timestamp = DateTime.Parse(e.Attribute("timestamp").Value, null, 
+							System.Globalization.DateTimeStyles.RoundtripKind),
+						value = e.Value
+					})
+	               .OrderBy(i => i.timestamp)
+	               .ToList();
 
-               foreach (var item in dataItems)
-               {
-                  var dataItem = _dataItemsDictionary[item.id];
-                  var sample = new DataItemSample(item.value.ToString(), item.timestamp);
-                  dataItem.AddSample(sample);
-               }
-            }
-         }
-      }
+	               foreach (var item in dataItems)
+	               {
+	                  var dataItem = _dataItemsDictionary[item.id];
+	                  var sample = new DataItemSample(item.value.ToString(), item.timestamp);
+	                  dataItem.AddSample(sample);
+	               }
+				}
+			}
+		}
 
-      private void ProbeCompletedHandler()
+		private void ProbeCompletedHandler()
 		{
 			ProbeCompleted?.Invoke(this, new EventArgs());
 		}

@@ -57,25 +57,30 @@ namespace MTConnectSharp
       /// Creates a new device from an MTConnect XML device node
       /// </summary>
       /// <param name="xElem">The MTConnect XML node which defines the device</param>
-      internal Device(XElement xElem = null)
+      internal Device(XElement xElem = null) 
+      {
+		DataItems = new ReadOnlyObservableCollection<DataItem>(_dataItems);
+		Components = new ReadOnlyObservableCollection<Component>(_components);
+
+		if (xElem?.Name.LocalName == "Device" || xElem?.Name.LocalName == "Agent")
 		{
-         DataItems = new ReadOnlyObservableCollection<DataItem>(_dataItems);
-         Components = new ReadOnlyObservableCollection<Component>(_components);
+			// Populate basic fields
+			Id = ParseUtility.GetAttribute(xElem, "id");
+			Name = ParseUtility.GetAttribute(xElem, "name");
 
-			if (xElem?.Name.LocalName == "Device")
+			try
 			{
-				// Populate basic fields
-				Id = ParseUtility.GetAttribute(xElem, "id");
-				Name = ParseUtility.GetAttribute(xElem, "name");
+				var descXml = xElem.Descendants().First(x => x.Name.LocalName == "Description");
 
-            var descXml = xElem.Descendants().First(x => x.Name.LocalName == "Description");
 				Description = descXml.Value ?? string.Empty;
 				Manufacturer = ParseUtility.GetAttribute(descXml, "manufacturer");
 				SerialNumber = ParseUtility.GetAttribute(descXml, "serialNumber");
-
-				_dataItems.AddRange(ParseUtility.GetDataItems(xElem));
-				_components.AddRange(ParseUtility.GetComponents(xElem));
 			}
+			catch {}
+
+			_dataItems.AddRange(ParseUtility.GetDataItems(xElem));
+			_components.AddRange(ParseUtility.GetComponents(xElem));
 		}
+      }
 	}
 }
