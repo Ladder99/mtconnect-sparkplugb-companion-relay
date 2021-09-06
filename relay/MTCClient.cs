@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Runtime.Loader;
+using System.Threading.Tasks;
 using MTConnectSharp;
 
 namespace mtc_spb_relay
@@ -19,7 +20,7 @@ namespace mtc_spb_relay
          UpdateInterval = updateInterval;
       }
       
-      public void Run()
+      public async Task Run()
       {
          var client = new MTConnectSharp.MTConnectClient()
          {
@@ -27,8 +28,6 @@ namespace mtc_spb_relay
             UpdateInterval = TimeSpan.FromSeconds(this.UpdateInterval)
          };
 
-         bool currentCompleted = false;
-         
          client.ProbeCompleted += (sender, info) => {
             var items = client.Devices
                .SelectMany(d => d.DataItems.Select(i => new { d = d.LongName, i = i.LongName }))
@@ -36,35 +35,35 @@ namespace mtc_spb_relay
 
             Console.WriteLine($"Number of DataItems: {items.Count()}");
 
+            client.SuppressDataItemChangeOnCurrent(true);   // control DataItemChanged handler during call to current
             client.StartStreaming();
          };
 
          client.GetCurrentCompleted += (sender, info) =>
          {
-            currentCompleted = true;
+            // probe and current completed
          };
          
          client.GetSampleCompleted += (sender, info) =>
          {
-
+            // sample poll completed
          };
          
          client.DataItemChanged += (sender, info) =>
          {
-            if (!currentCompleted)
-               return;
+            // dataitem sample changed
             
             Console.WriteLine($"sequence: {((MTConnectClient.DataChangedEventArgs)info).StartingSequence} -> {((MTConnectClient.DataChangedEventArgs)info).EndingSequence}");
             
             foreach (var kv in ((MTConnectClient.DataChangedEventArgs)info).DataItems)
             {
-               Console.WriteLine($"{kv.Key} : {kv.Value.PreviousSample?.Value} => {kv.Value.CurrentSample.Value}");
+               Console.WriteLine($"{kv.Key} : (seq:{kv.Value.PreviousSample?.Sequence}){kv.Value.PreviousSample?.Value} => (seq:{kv.Value.CurrentSample?.Sequence}){kv.Value.CurrentSample.Value}");
             }
             
             Console.WriteLine("");
          };
 
-         client.Probe();
+         await client.Probe();
       }
    }
 }

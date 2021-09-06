@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Xml.Linq;
 
 namespace MTConnectSharp
 {
@@ -16,5 +17,6 @@ namespace MTConnectSharp
       string SubType { get; }
       string Units { get; }
       string NativeUnits { get; }
+      XElement Model { get; }
    }
 }

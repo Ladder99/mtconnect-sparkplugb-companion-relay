@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Timers;
 using System.Xml.Linq;
 
@@ -80,6 +81,12 @@ namespace MTConnectSharp
 		private bool _sampleStarted = false;
 		private bool _sampleCompleted = false;
 
+		private bool _suppressDataItemChangeOnCurrent { get; set; }
+		public void SuppressDataItemChangeOnCurrent(bool suppress)
+		{
+			_suppressDataItemChangeOnCurrent = suppress;
+		}
+		
 		/// <summary>
 		/// Initializes a new Client 
 		/// </summary>
@@ -94,14 +101,14 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Starts sample polling and updating DataItem values as they change
 		/// </summary>
-		public void StartStreaming()
+		public async Task StartStreaming()
 		{
 			if (_streamingTimer?.Enabled == true)
 			{
 				return;
 			}
 
-			GetCurrentState();
+			await GetCurrentState();
 
 			_streamingTimer = new Timer(UpdateInterval.TotalMilliseconds);
 			_streamingTimer.Elapsed += StreamingTimerElapsed;
@@ -119,7 +126,7 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Gets current response and updates DataItems
 		/// </summary>
-		public void GetCurrentState()
+		public async Task GetCurrentState()
 		{
 			if (!_probeCompleted)
 			{
@@ -140,7 +147,7 @@ namespace MTConnectSharp
 			{
 				_currentStarted = true;
 				request.AddHeader("Accept", "application/xml");
-				var result = _restClient.ExecuteGetAsync(request).Result;
+				var result = await _restClient.ExecuteGetAsync(request);
 				ParseCurrentResponse(result);
 			}
 			catch (Exception ex)
@@ -154,7 +161,7 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Gets probe response from the agent and populates the devices collection
 		/// </summary>
-		public void Probe()
+		public async Task Probe()
 		{
 			if (_probeStarted && !_probeCompleted)
 			{
@@ -175,7 +182,7 @@ namespace MTConnectSharp
 			{
 				_probeStarted = true;
 				request.AddHeader("Accept", "application/xml");
-				var result = _restClient.ExecuteGetAsync(request).Result; 
+				var result = await _restClient.ExecuteGetAsync(request); 
 				ParseProbeResponse(result);
 			}
 			catch (Exception ex)
@@ -240,7 +247,7 @@ namespace MTConnectSharp
 			return dataItems;
 		}
 
-		private void StreamingTimerElapsed(object sender, ElapsedEventArgs e)
+		private async void StreamingTimerElapsed(object sender, ElapsedEventArgs e)
 		{
 			var request = new RestRequest
 			{
@@ -250,9 +257,9 @@ namespace MTConnectSharp
 			try
 			{
 				_sampleStarted = true;
-				request.AddParameter("at", _lastSequence + 1);
+				request.AddParameter("from", _lastSequence + 1);
 				request.AddHeader("Accept", "application/xml");
-				var result = _restClient.ExecuteGetAsync(request).Result;
+				var result = await _restClient.ExecuteGetAsync(request);
 				ParseStream(result);
 				GetSampleCompletedHandler();
 			}
@@ -274,10 +281,8 @@ namespace MTConnectSharp
 		public class DataChangedEventArgs: EventArgs
 		{
 			public long StartingSequence { get; set; }
-			
 			public long EndingSequence { get; set; }
 			public Dictionary<string,DataItem> DataItems { get; set; }
-
 			public DataChangedEventArgs()
 			{
 				DataItems = new Dictionary<string, DataItem>();
@@ -292,17 +297,18 @@ namespace MTConnectSharp
 		{
 			using (StringReader sr = new StringReader(response.Content))
 			{
+				DataChangedEventArgs args = new DataChangedEventArgs();
 				bool sequenceChanged = false;
 				
 				var xdoc = XDocument.Load(sr);
 
-				var currentSequence = Convert.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
+				var currentSequence = Convert
+					.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
 					.Attribute("lastSequence").Value);
 
 				if (currentSequence != _lastSequence)
 					sequenceChanged = true;
 				
-				DataChangedEventArgs args = new DataChangedEventArgs();
 				args.StartingSequence = _lastSequence;
 				args.EndingSequence = currentSequence;
 				
@@ -318,7 +324,7 @@ namespace MTConnectSharp
 						timestamp = DateTime.Parse(e.Attribute("timestamp").Value, null, 
 							System.Globalization.DateTimeStyles.RoundtripKind),
 						value = e.Value,
-						sequence = long.Parse(e.Attribute("sequence").Value)
+						sequence = Convert.ToInt64(e.Attribute("sequence").Value)
 					})
 	               .OrderBy(i => i.sequence)
 	               .ToList();
@@ -333,7 +339,11 @@ namespace MTConnectSharp
 						args.DataItems.Add(dataItem.Id, dataItem);
 	               }
 
-	               if(sequenceChanged) DataItemChanged?.Invoke(this, args);
+					if
+					(
+						(sequenceChanged && !_currentStarted) || 
+						(sequenceChanged && _currentStarted && !_suppressDataItemChangeOnCurrent)
+					) DataItemChanged?.Invoke(this, args);
 				}
 			}
 		}

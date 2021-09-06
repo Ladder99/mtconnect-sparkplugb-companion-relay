@@ -45,24 +45,28 @@ namespace MTConnectSharp
          get;
          private set;
 		}
+		
+		public XElement Model { get; }
 
 		/// <summary>
 		/// Creates a new component
 		/// </summary>
-		internal Component(XElement xmlComponent) 
+		internal Component(XElement xmlComponent)
 		{
-         Type = xmlComponent.Name?.ToString() ?? string.Empty;
-         Id = ParseUtility.GetAttribute(xmlComponent, "id");
-         Name = ParseUtility.GetAttribute(xmlComponent, "name");
-         if (string.IsNullOrEmpty(Name))
-            Name = Id;
-         NativeName = ParseUtility.GetAttribute(xmlComponent, "nativeName");
+			Model = xmlComponent;
+			
+			Type = xmlComponent.Name?.ToString() ?? string.Empty;
+			Id = ParseUtility.GetAttribute(xmlComponent, "id");
+			Name = ParseUtility.GetAttribute(xmlComponent, "name");
+			if (string.IsNullOrEmpty(Name)) Name = Id;
+			
+			NativeName = ParseUtility.GetAttribute(xmlComponent, "nativeName");
 
-         _dataItems = new ObservableCollection<DataItem>(ParseUtility.GetDataItems(xmlComponent));
-         DataItems = new ReadOnlyObservableCollection<DataItem>(_dataItems);
+			_dataItems = new ObservableCollection<DataItem>(ParseUtility.GetDataItems(xmlComponent));
+			DataItems = new ReadOnlyObservableCollection<DataItem>(_dataItems);
 
-         _components = new ObservableCollection<Component>(ParseUtility.GetComponents(xmlComponent));
-         Components = new ReadOnlyObservableCollection<Component>(_components);
+			_components = new ObservableCollection<Component>(ParseUtility.GetComponents(xmlComponent));
+			Components = new ReadOnlyObservableCollection<Component>(_components);
 		}
 	}
 }

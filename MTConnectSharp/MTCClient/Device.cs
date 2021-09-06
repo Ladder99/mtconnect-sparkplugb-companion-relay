@@ -24,6 +24,10 @@ namespace MTConnectSharp
 		/// Serial number of the device
 		/// </summary>
 		public string SerialNumber { get; set; }
+		
+		public bool IsAgent { get; set; }
+		
+		public XElement Model { get; set; }
 
 		/// <summary>
 		/// The DataItems which are direct children of the device
@@ -64,6 +68,9 @@ namespace MTConnectSharp
 
 		if (xElem?.Name.LocalName == "Device" || xElem?.Name.LocalName == "Agent")
 		{
+			Model = xElem;
+			IsAgent = xElem?.Name.LocalName == "Agent";
+			
 			// Populate basic fields
 			Id = ParseUtility.GetAttribute(xElem, "id");
 			Name = ParseUtility.GetAttribute(xElem, "name");

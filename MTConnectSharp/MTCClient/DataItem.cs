@@ -46,6 +46,8 @@ namespace MTConnectSharp
 		/// </summary>
 		public int BufferSize { get; set; }
 
+		public XElement Model { get; set; }
+		
 		/// <summary>
 		/// The value immediately before the value
 		/// </summary>
@@ -83,6 +85,8 @@ namespace MTConnectSharp
 		/// <param name="xmlDataItem">The XElement which defines the DataItem</param>
 		internal DataItem(XElement xmlDataItem)
 		{
+			Model = xmlDataItem;
+			
 			SampleHistory = new ReadOnlyObservableCollection<DataItemSample>(_dataItemSamples);
 
 			BufferSize = 100;

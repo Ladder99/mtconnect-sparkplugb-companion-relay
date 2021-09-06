@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Xml.Linq;
 
 namespace MTConnectSharp
 {
@@ -10,5 +11,6 @@ namespace MTConnectSharp
 		string Id { get; }
 		string Name { get; }
 		string LongName { get; }
+		XElement Model { get; }
 	}
 }
