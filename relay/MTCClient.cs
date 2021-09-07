@@ -28,34 +28,49 @@ namespace mtc_spb_relay
             UpdateInterval = TimeSpan.FromSeconds(this.UpdateInterval)
          };
 
-         client.ProbeCompleted += (sender, info) => {
+         client.OnProbeCompleted = async (client, xml) => 
+         {
+            Console.WriteLine("OK: /probe");
+            
             var items = client.Devices
                .SelectMany(d => d.DataItems.Select(i => new { d = d.LongName, i = i.LongName }))
                .ToArray();
 
-            Console.WriteLine($"Number of DataItems: {items.Count()}");
-
-            client.SuppressDataItemChangeOnCurrent(true);   // control DataItemChanged handler during call to current
-            client.StartStreaming();
+            // control OnDataChanged during call to current
+            client.SuppressDataItemChangeOnCurrent(true);   
+            
+            await client.StartStreaming();
          };
 
-         client.GetCurrentCompleted += (sender, info) =>
+         client.OnProbeFailed = async (client, ex) =>
          {
-            // probe and current completed
+            Console.WriteLine("ERR: /probe");
+            Console.WriteLine(ex);
          };
          
-         client.GetSampleCompleted += (sender, info) =>
+         client.OnCurrentCompleted = async (client, xml) =>
          {
-            // sample poll completed
+            Console.WriteLine("OK: /current");
          };
          
-         client.DataItemChanged += (sender, info) =>
+         client.OnCurrentFailed = async (client, ex) =>
+         {
+            Console.WriteLine("ERR: /current");
+            Console.WriteLine(ex);
+         };
+         
+         client.OnSampleCompleted = async (client, xml) =>
+         {
+            Console.WriteLine("OK: /sample");
+         };
+         
+         client.OnDataChanged = async (client, xml, poll) =>
          {
             // dataitem sample changed
             
-            Console.WriteLine($"sequence: {((MTConnectClient.DataChangedEventArgs)info).StartingSequence} -> {((MTConnectClient.DataChangedEventArgs)info).EndingSequence}");
+            Console.WriteLine($"sequence: {poll.StartingSequence} -> {poll.EndingSequence}");
             
-            foreach (var kv in ((MTConnectClient.DataChangedEventArgs)info).DataItems)
+            foreach (var kv in poll.DataItems)
             {
                Console.WriteLine($"{kv.Key} : (seq:{kv.Value.PreviousSample?.Sequence}){kv.Value.PreviousSample?.Value} => (seq:{kv.Value.CurrentSample?.Sequence}){kv.Value.CurrentSample.Value}");
             }

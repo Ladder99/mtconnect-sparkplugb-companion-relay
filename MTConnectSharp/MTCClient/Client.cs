@@ -16,17 +16,38 @@ namespace MTConnectSharp
    /// </summary>
    public class MTConnectClient : IMTConnectClient, IDisposable
    {
-		/// <summary>
-		/// The probe response has been recieved and parsed
-		/// </summary>
-		public event EventHandler ProbeCompleted;
+		public class SamplePollResult
+		{
+			public bool HasUpdates
+			{
+				get
+				{
+					return StartingSequence != EndingSequence;
+				}
+			}
+			public long StartingSequence { get; set; }
+			public long EndingSequence { get; set; }
+			public Dictionary<string,DataItem> DataItems { get; set; }
+			public SamplePollResult()
+			{
+			   DataItems = new Dictionary<string, DataItem>();
+			}
+		}
+	   
+		public Func<IMTConnectClient, XDocument, Task> OnProbeCompleted = async (a, b) => {  };
 
-		public event EventHandler GetCurrentCompleted;
+		public Func<IMTConnectClient, Exception, Task> OnProbeFailed = async (a, b) => {  };
+
+		public Func<IMTConnectClient, XDocument, Task> OnCurrentCompleted = async (a, b) => {  };
+
+		public Func<IMTConnectClient, Exception, Task> OnCurrentFailed = async (a, b) => {  };
+
+		public Func<IMTConnectClient, XDocument, Task> OnSampleCompleted = async (a, b) => {  };
+
+		public Func<IMTConnectClient, Exception, Task> OnSampleFailed = async (a, b) => {  };
 		
-		public event EventHandler GetSampleCompleted;
-
-		public event EventHandler DataItemChanged;
-
+		public Func<IMTConnectClient, XDocument, SamplePollResult, Task> OnDataChanged = async (a, b, c) => {  };
+		
 		/// <summary>
 		/// The base uri of the agent
 		/// </summary>
@@ -126,7 +147,7 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Gets current response and updates DataItems
 		/// </summary>
-		public async Task GetCurrentState()
+		public async Task<bool> GetCurrentState()
 		{
 			if (!_probeCompleted)
 			{
@@ -146,14 +167,33 @@ namespace MTConnectSharp
 			try
 			{
 				_currentStarted = true;
+				
 				request.AddHeader("Accept", "application/xml");
 				var result = await _restClient.ExecuteGetAsync(request);
-				ParseCurrentResponse(result);
+				
+				var parsed = ParseStream(result);
+			
+				await OnCurrentCompleted(this, parsed.Item1);
+				
+				if
+				(
+					(parsed.Item2.HasUpdates && !_currentStarted) || 
+					(parsed.Item2.HasUpdates && _currentStarted && !_suppressDataItemChangeOnCurrent)
+				)
+					await OnDataChanged(this, parsed.Item1, parsed.Item2);
+
+				_currentCompleted = true;
+				_currentStarted = false;
+				
+				return true;
 			}
 			catch (Exception ex)
 			{
 				_currentStarted = false;
-				throw new Exception("Current request failed.\nAgent Uri: " + AgentUri, ex);
+
+				await OnCurrentFailed(this, ex);
+				
+				return false;
 			} 
 			
 		}
@@ -161,7 +201,7 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Gets probe response from the agent and populates the devices collection
 		/// </summary>
-		public async Task Probe()
+		public async Task<bool> Probe()
 		{
 			if (_probeStarted && !_probeCompleted)
 			{
@@ -181,14 +221,26 @@ namespace MTConnectSharp
 			try
 			{
 				_probeStarted = true;
+				
 				request.AddHeader("Accept", "application/xml");
 				var result = await _restClient.ExecuteGetAsync(request); 
-				ParseProbeResponse(result);
+				
+				var xdoc = ParseProbeResponse(result);
+				
+				_probeCompleted = true;
+				_probeStarted = false;
+				
+				await OnProbeCompleted(this, xdoc);
+
+				return true;
 			}
 			catch (Exception ex)
 			{
 				_probeStarted = false;
-				throw new Exception("Probe request failed.\nAgent Uri: " + AgentUri, ex);
+				
+				await OnProbeFailed(this, ex);
+
+				return false;
 			} 
 		}
 		
@@ -196,9 +248,10 @@ namespace MTConnectSharp
 		/// Parses IRestResponse from a probe command into a Device collection
 		/// </summary>
 		/// <param name="response">An IRestResponse from a probe command</param>
-		private void ParseProbeResponse(IRestResponse response)
+		private XDocument ParseProbeResponse(IRestResponse response)
 		{
 			var xdoc = XDocument.Load(new StringReader(response.Content));
+			
 			if (_devices.Any())
 				_devices.Clear();
 
@@ -212,9 +265,7 @@ namespace MTConnectSharp
 
 			BuildDataItemDictionary();
 
-			_probeCompleted = true;
-			_probeStarted = false;
-			ProbeCompletedHandler();			
+			return xdoc;
 		}
 
 		/// <summary>
@@ -257,60 +308,48 @@ namespace MTConnectSharp
 			try
 			{
 				_sampleStarted = true;
+				
 				request.AddParameter("from", _lastSequence + 1);
 				request.AddHeader("Accept", "application/xml");
 				var result = await _restClient.ExecuteGetAsync(request);
-				ParseStream(result);
-				GetSampleCompletedHandler();
+				
+				var parsed = ParseStream(result);
+
+				_sampleCompleted = true;
+				_sampleStarted = false;
+				
+				await OnSampleCompleted(this, parsed.Item1);
+				
+				if (parsed.Item2.HasUpdates)
+					await OnDataChanged(this, parsed.Item1, parsed.Item2);
 			}
 			catch (Exception ex)
 			{
 				_sampleStarted = false;
-				throw new Exception("Sample request failed.\nAgent Uri: " + AgentUri, ex);
+
+				await OnSampleFailed(this, ex);
 			} 
 		}
 
-		private void ParseCurrentResponse(IRestResponse response)
-		{
-			ParseStream(response);
-			_currentCompleted = true;
-			_currentStarted = false;
-			GetCurrentCompletedHandler();
-		}
-		
-		public class DataChangedEventArgs: EventArgs
-		{
-			public long StartingSequence { get; set; }
-			public long EndingSequence { get; set; }
-			public Dictionary<string,DataItem> DataItems { get; set; }
-			public DataChangedEventArgs()
-			{
-				DataItems = new Dictionary<string, DataItem>();
-			}
-		}
-		
 		/// <summary>
 		/// Parses response from a current or sample request, updates changed data items and fires events
 		/// </summary>
 		/// <param name="response">IRestResponse from the MTConnect request</param>
-		private void ParseStream(IRestResponse response)
+		private (XDocument, SamplePollResult) ParseStream(IRestResponse response)
 		{
+			XDocument xdoc = null;
+			SamplePollResult pollResult = new SamplePollResult();
+			
 			using (StringReader sr = new StringReader(response.Content))
 			{
-				DataChangedEventArgs args = new DataChangedEventArgs();
-				bool sequenceChanged = false;
-				
-				var xdoc = XDocument.Load(sr);
+				xdoc = XDocument.Load(sr);
 
 				var currentSequence = Convert
 					.ToInt64(xdoc.Descendants().First(e => e.Name.LocalName == "Header")
 					.Attribute("lastSequence").Value);
 
-				if (currentSequence != _lastSequence)
-					sequenceChanged = true;
-				
-				args.StartingSequence = _lastSequence;
-				args.EndingSequence = currentSequence;
+				pollResult.StartingSequence = _lastSequence;
+				pollResult.EndingSequence = currentSequence;
 				
 				_lastSequence = currentSequence;
 
@@ -335,37 +374,15 @@ namespace MTConnectSharp
 	                  var sample = new DataItemSample(item.value.ToString(), item.timestamp, item.sequence);
 	                  dataItem.AddSample(sample);
 	                  
-	                  if(!args.DataItems.ContainsKey(dataItem.Id))
-						args.DataItems.Add(dataItem.Id, dataItem);
+	                  if(!pollResult.DataItems.ContainsKey(dataItem.Id))
+		                  pollResult.DataItems.Add(dataItem.Id, dataItem);
 	               }
-
-					if
-					(
-						(sequenceChanged && !_currentStarted) || 
-						(sequenceChanged && _currentStarted && !_suppressDataItemChangeOnCurrent)
-					) DataItemChanged?.Invoke(this, args);
 				}
 			}
+
+			return (xdoc, pollResult);
 		}
 
-		private void ProbeCompletedHandler()
-		{
-			ProbeCompleted?.Invoke(this, new EventArgs());
-		}
-		
-		private void GetCurrentCompletedHandler()
-		{
-			GetCurrentCompleted?.Invoke(this, new EventArgs());
-		}
-		
-		private void GetSampleCompletedHandler()
-		{
-			GetSampleCompleted?.Invoke(this, new EventArgs());
-		}
-
-		/// <summary>
-		/// Disposes unmanaged resources
-		/// </summary>
 		public void Dispose()
 		{
 			_streamingTimer?.Dispose();
