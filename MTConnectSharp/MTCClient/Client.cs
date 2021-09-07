@@ -129,7 +129,7 @@ namespace MTConnectSharp
 				return;
 			}
 
-			await GetCurrentState();
+			await GetCurrent();
 
 			_streamingTimer = new Timer(UpdateInterval.TotalMilliseconds);
 			_streamingTimer.Elapsed += StreamingTimerElapsed;
@@ -147,7 +147,7 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Gets current response and updates DataItems
 		/// </summary>
-		public async Task<bool> GetCurrentState()
+		public async Task<bool> GetCurrent()
 		{
 			if (!_probeCompleted)
 			{
@@ -201,11 +201,11 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Gets probe response from the agent and populates the devices collection
 		/// </summary>
-		public async Task<bool> Probe()
+		public async Task<bool> GetProbe()
 		{
 			if (_probeStarted && !_probeCompleted)
 			{
-				throw new InvalidOperationException("Cannot start a new Probe when one is still running.");
+				throw new InvalidOperationException("Cannot start a new GetProbe when one is still running.");
 			}
 
 			_restClient = new RestClient
@@ -298,7 +298,7 @@ namespace MTConnectSharp
 			return dataItems;
 		}
 
-		private async void StreamingTimerElapsed(object sender, ElapsedEventArgs e)
+		public async Task<bool> GetSample()
 		{
 			var request = new RestRequest
 			{
@@ -322,13 +322,22 @@ namespace MTConnectSharp
 				
 				if (parsed.Item2.HasUpdates)
 					await OnDataChanged(this, parsed.Item1, parsed.Item2);
+
+				return true;
 			}
 			catch (Exception ex)
 			{
 				_sampleStarted = false;
 
 				await OnSampleFailed(this, ex);
+
+				return false;
 			} 
+		}
+		
+		private async void StreamingTimerElapsed(object sender, ElapsedEventArgs e)
+		{
+			await GetSample();
 		}
 
 		/// <summary>

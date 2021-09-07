@@ -8,10 +8,11 @@ namespace MTConnectSharp
    public interface IMTConnectClient
 	{
 		string AgentUri { get; set; }
-		Task<bool> Probe();
+		Task<bool> GetProbe();
 		Task StartStreaming();
 		void StopStreaming();
-		Task<bool> GetCurrentState();
+		Task<bool> GetCurrent();
+		Task<bool> GetSample();
 		void SuppressDataItemChangeOnCurrent(bool suppress);
 		ReadOnlyObservableCollection<Device> Devices { get; }
 		TimeSpan UpdateInterval { get; set; }
