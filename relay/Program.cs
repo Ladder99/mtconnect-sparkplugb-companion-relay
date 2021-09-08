@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+// https://andrewlock.net/introducing-ihostlifetime-and-untangling-the-generic-host-startup-interactions/
+// https://deniskyashif.com/2019/12/08/csharp-channels-part-1/
 // https://dfederm.com/building-a-console-app-with-.net-generic-host/
 // https://flerka.github.io/personal-blog/2020-01-23-communication-with-hosted-service-using-channels/
 // https://blog.stephencleary.com/2020/06/backgroundservice-gotcha-application-lifetime.html
@@ -18,11 +20,18 @@ namespace mtc_spb_relay
             await Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
+                    services.AddHostedService<TerminatorService>();
+
+                    services.AddSingleton(sp => new TerminatorService.TerminatorServiceOptions()
+                    {
+                        TerminateInMs = 10000
+                    });
+                    
                     services.AddHostedService<ChannelReaderService>();
                     
-                    services.AddHostedService<MTCClient>();
+                    services.AddHostedService<MTConnect.ClientService>();
                     
-                    services.AddSingleton(sp => new MTCClient.MTCClientOptions()
+                    services.AddSingleton(sp => new MTConnect.ClientServiceOptions()
                     {
                         AgentUri = "http://mtconnect.mazakcorp.com:5717",
                         PollIntervalMs = 2000,
@@ -30,76 +39,17 @@ namespace mtc_spb_relay
                         SupressDataItemChangeOnCurrent = true
                     });
                     
-                    services.AddSingleton(Channel.CreateUnbounded<MTCClient.MTCClientChannelPayload>(
-                        new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
+                    services.AddSingleton<Channel<MTConnect.ClientServiceChannelFrame>>(
+                        Channel.CreateUnbounded<MTConnect.ClientServiceChannelFrame>(
+                            new UnboundedChannelOptions() { SingleReader = false, SingleWriter = true }));
+
+                    services.AddSingleton<ChannelWriter<MTConnect.ClientServiceChannelFrame>>(
+                        sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceChannelFrame>>().Writer);
+                    
+                    services.AddSingleton<ChannelReader<MTConnect.ClientServiceChannelFrame>>(
+                        sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceChannelFrame>>().Reader);
                 })
                 .RunConsoleAsync();
-        }
-    }
-
-    public class ChannelReaderService : IHostedService
-    {
-        private readonly IHostApplicationLifetime _appLifetime;
-        private Channel<MTCClient.MTCClientChannelPayload> _channel;
-        
-        public ChannelReaderService(
-            IHostApplicationLifetime appLifetime,
-            Channel<MTCClient.MTCClientChannelPayload> channel)
-        {
-            _appLifetime = appLifetime;
-            _channel = channel;
-        }
-
-        public Task StartAsync(CancellationToken cancellationToken)
-        {
-            _appLifetime.ApplicationStarted.Register(() =>
-            {
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        while (!cancellationToken.IsCancellationRequested)
-                        {
-                            while (await _channel.Reader.WaitToReadAsync())
-                            {
-                                while (_channel.Reader.TryRead(out var frame))
-                                {
-                                    Console.WriteLine(frame.Type);
-
-                                    switch (frame.Type)
-                                    {
-                                        case MTCClient.MTCClientChannelPayload.PayloadTypeEnum.DATA_CHANGED:
-                                            Console.WriteLine($"sequence: {frame.Payload.poll.StartingSequence} -> {frame.Payload.poll.EndingSequence}");
-            
-                                            foreach (var kv in frame.Payload.poll.DataItems)
-                                            {
-                                                Console.WriteLine($"{kv.Key} : (seq:{kv.Value.PreviousSample?.Sequence}){kv.Value.PreviousSample?.Value} => (seq:{kv.Value.CurrentSample?.Sequence}){kv.Value.CurrentSample.Value}");
-                                            }
-            
-                                            Console.WriteLine("");
-                                            break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        
-                    }
-                    finally
-                    {
-                        _appLifetime.StopApplication();
-                    }
-                });
-            });
-
-            return Task.CompletedTask;
-        }
-
-        public Task StopAsync(CancellationToken cancellationToken)
-        {
-            return Task.CompletedTask;
         }
     }
 }
