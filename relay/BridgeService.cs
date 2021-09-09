@@ -6,21 +6,24 @@ using Microsoft.Extensions.Hosting;
 
 namespace mtc_spb_relay
 {
-    public class ChannelReaderService : IHostedService
+    public class BridgeService : IHostedService
     {
         private readonly IHostApplicationLifetime _appLifetime;
-        private ChannelReader<MTConnect.ClientServiceChannelFrame> _channelReader;
+        private ChannelReader<MTConnect.ClientServiceChannelFrame> _mtcChannelReader;
+        private ChannelWriter<SparkplugB.ClientServiceChannelFrame> _spbChannelWriter;
         
         private Task _task;
         private CancellationTokenSource _tokenSource;
         private CancellationToken _token;
         
-        public ChannelReaderService(
+        public BridgeService(
             IHostApplicationLifetime appLifetime,
-            ChannelReader<MTConnect.ClientServiceChannelFrame> channelReader)
+            ChannelReader<MTConnect.ClientServiceChannelFrame> mtcChannelReader,
+            ChannelWriter<SparkplugB.ClientServiceChannelFrame> spbChannelWriter)
         {
             _appLifetime = appLifetime;
-            _channelReader = channelReader;
+            _mtcChannelReader = mtcChannelReader;
+            _spbChannelWriter = spbChannelWriter;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -36,10 +39,9 @@ namespace mtc_spb_relay
                     {
                         while (!_token.IsCancellationRequested)
                         {
-                            while (await _channelReader.WaitToReadAsync())
+                            while (await _mtcChannelReader.WaitToReadAsync())
                             {
-                                await foreach (var frame in _channelReader.ReadAllAsync())
-                                //while (_channel.Reader.TryRead(out var frame))
+                                await foreach (var frame in _mtcChannelReader.ReadAllAsync())
                                 {
                                     processFrame(frame);
                                 }
@@ -48,12 +50,12 @@ namespace mtc_spb_relay
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("ChannelReaderService ERROR");
+                        Console.WriteLine("BridgeService ERROR");
                         Console.WriteLine(ex);
                     }
                     finally
                     {
-                        Console.WriteLine("ChannelReaderService Stopping");
+                        Console.WriteLine("BridgeService Stopping");
                         _appLifetime.StopApplication();
                     }
                 }, _token);
@@ -64,7 +66,7 @@ namespace mtc_spb_relay
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            Console.WriteLine("ChannelReaderService Stop");
+            Console.WriteLine("BridgeService Stop");
             
             _tokenSource.Cancel();
             Task.WaitAny(_task);

@@ -1,15 +1,21 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+// async
+// https://devblogs.microsoft.com/dotnet/configureawait-faq/
+
+// host
 // https://andrewlock.net/introducing-ihostlifetime-and-untangling-the-generic-host-startup-interactions/
-// https://deniskyashif.com/2019/12/08/csharp-channels-part-1/
 // https://dfederm.com/building-a-console-app-with-.net-generic-host/
-// https://flerka.github.io/personal-blog/2020-01-23-communication-with-hosted-service-using-channels/
 // https://blog.stephencleary.com/2020/06/backgroundservice-gotcha-application-lifetime.html
+
+// channels
+// https://devblogs.microsoft.com/dotnet/an-introduction-to-system-threading-channels/
+// https://deniskyashif.com/2019/12/08/csharp-channels-part-1/
+// https://flerka.github.io/personal-blog/2020-01-23-communication-with-hosted-service-using-channels/
 
 namespace mtc_spb_relay
 {
@@ -20,14 +26,38 @@ namespace mtc_spb_relay
             await Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
+                    /*
                     services.AddHostedService<TerminatorService>();
 
                     services.AddSingleton(sp => new TerminatorService.TerminatorServiceOptions()
                     {
-                        TerminateInMs = 10000
+                        TerminateInMs = 5000
+                    });
+                    */
+                    
+                    services.AddHostedService<BridgeService>();
+                    
+                    services.AddHostedService<SparkplugB.ClientService>();
+                    
+                    services.AddSingleton(sp => new SparkplugB.ClientServiceOptions()
+                    {
+                        BrokerAddress = "10.20.30.114",
+                        Port = 1883,
+                        UseTls = false,
+                        Username = "admin",
+                        Password = "password",
+                        ClientId = Guid.NewGuid().ToString()
                     });
                     
-                    services.AddHostedService<ChannelReaderService>();
+                    services.AddSingleton<Channel<SparkplugB.ClientServiceChannelFrame>>(
+                        Channel.CreateUnbounded<SparkplugB.ClientServiceChannelFrame>(
+                            new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
+
+                    services.AddSingleton<ChannelWriter<SparkplugB.ClientServiceChannelFrame>>(
+                        sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceChannelFrame>>().Writer);
+                    
+                    services.AddSingleton<ChannelReader<SparkplugB.ClientServiceChannelFrame>>(
+                        sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceChannelFrame>>().Reader);
                     
                     services.AddHostedService<MTConnect.ClientService>();
                     
@@ -41,7 +71,7 @@ namespace mtc_spb_relay
                     
                     services.AddSingleton<Channel<MTConnect.ClientServiceChannelFrame>>(
                         Channel.CreateUnbounded<MTConnect.ClientServiceChannelFrame>(
-                            new UnboundedChannelOptions() { SingleReader = false, SingleWriter = true }));
+                            new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
 
                     services.AddSingleton<ChannelWriter<MTConnect.ClientServiceChannelFrame>>(
                         sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceChannelFrame>>().Writer);

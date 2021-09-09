@@ -57,6 +57,7 @@ namespace mtc_spb_relay
         public Task StopAsync(CancellationToken cancellationToken)
         {
             Console.WriteLine("TerminatorService Stop");
+            
             return Task.CompletedTask;
         }
     }

@@ -10,22 +10,21 @@ namespace mtc_spb_relay.MTConnect
 {
    public class ClientService: IHostedService
    {
-      //private readonly ILogger _logger;
       private readonly IHostApplicationLifetime _appLifetime;
       
       private MTConnectClient _client = null;
       private readonly ClientServiceOptions _serviceOptions;
       private ChannelWriter<ClientServiceChannelFrame> _channelWriter;
 
-      private bool _stopRequested = false;
+      private Task _task;
+      private CancellationTokenSource _tokenSource;
+      private CancellationToken _token;
       
       public ClientService(
-         //ILogger<ConsoleHostedService> logger,
          IHostApplicationLifetime appLifetime,
          ClientServiceOptions serviceOptions,
          ChannelWriter<ClientServiceChannelFrame> channelWriter)
       {
-         //_logger = logger;
          _appLifetime = appLifetime;
          _serviceOptions = serviceOptions;
          _channelWriter = channelWriter;
@@ -35,12 +34,13 @@ namespace mtc_spb_relay.MTConnect
       {
          _appLifetime.ApplicationStarted.Register(() =>
          {
-            Task.Run(async () =>
+            _tokenSource = new CancellationTokenSource();
+            _token = _tokenSource.Token;
+            
+            _task = Task.Run(async () =>
             {
                try
                {
-                  //_logger.LogInformation("Hello World!");
-
                   _client = new MTConnectClient()
                   {
                      AgentUri = _serviceOptions.AgentUri,
@@ -74,7 +74,7 @@ namespace mtc_spb_relay.MTConnect
                   _channelWriter.Complete();
                   _appLifetime.StopApplication();
                }
-            });
+            }, _token);
          });
 
          return Task.CompletedTask;
@@ -83,7 +83,10 @@ namespace mtc_spb_relay.MTConnect
       public Task StopAsync(CancellationToken cancellationToken)
       {
          Console.WriteLine("MTConnect.ClientService Stop");
-         _stopRequested = true;
+         
+         _tokenSource.Cancel();
+         Task.WaitAny(_task);
+         
          return Task.CompletedTask;
       }
       
@@ -100,7 +103,7 @@ namespace mtc_spb_relay.MTConnect
             
          await client.GetCurrent();
 
-         while (!_stopRequested)
+         while (!_token.IsCancellationRequested)
          {
             var sampleSuccess = await client.GetSample();
             await Task.Delay(sampleSuccess ? _serviceOptions.PollIntervalMs : _serviceOptions.RetryIntervalMs);
