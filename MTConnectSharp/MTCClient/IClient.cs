@@ -17,4 +17,10 @@ namespace MTConnectSharp
 		ReadOnlyObservableCollection<Device> Devices { get; }
 		TimeSpan UpdateInterval { get; set; }
 	}
+   
+   public interface IIMTConnectClient
+   {
+	   string AgentUri { get; set; }
+	   ReadOnlyObservableCollection<Device> Devices { get; }
+   }
 }

@@ -14,7 +14,7 @@ namespace MTConnectSharp
    /// <summary>
    /// Connects to a single agent and streams data from it.
    /// </summary>
-   public class MTConnectClient : IMTConnectClient, IDisposable
+   public class MTConnectClient : IMTConnectClient, IIMTConnectClient, IDisposable
    {
 		public class SamplePollResult
 		{

@@ -35,7 +35,7 @@ namespace mtc_spb_relay
                     });
                     */
                     
-                    services.AddHostedService<BridgeService>();
+                    services.AddHostedService<Bridge.Example01>();
                     
                     services.AddHostedService<SparkplugB.ClientService>();
                     
