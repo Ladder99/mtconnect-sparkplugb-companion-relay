@@ -1,6 +1,6 @@
 namespace mtc_spb_relay.MTConnect
 {
-    public class ClientServiceChannelFrame
+    public class ClientServiceOutboundChannelFrame
     {
         public enum FrameTypeEnum
         {

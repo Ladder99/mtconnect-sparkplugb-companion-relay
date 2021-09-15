@@ -1,6 +1,6 @@
 namespace mtc_spb_relay.SparkplugB
 {
-    public class ClientServiceChannelFrame
+    public class ClientServiceInboundChannelFrame
     {
         public enum FrameTypeEnum
         {

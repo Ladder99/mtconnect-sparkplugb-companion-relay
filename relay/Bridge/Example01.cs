@@ -10,7 +10,6 @@ using Microsoft.Extensions.Hosting;
 using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Client.Options;
-using mtc_spb_relay.MTConnect;
 using Newtonsoft.Json.Linq;
 
 namespace mtc_spb_relay.Bridge
@@ -28,10 +27,12 @@ namespace mtc_spb_relay.Bridge
         private IMqttClient _client;
         
         public Example01(
-            IHostApplicationLifetime appLifetime, 
-            ChannelReader<ClientServiceChannelFrame> mtcChannelReader, 
-            ChannelWriter<SparkplugB.ClientServiceChannelFrame> spbChannelWriter) 
-                : base(appLifetime, mtcChannelReader, spbChannelWriter)
+            IHostApplicationLifetime appLifetime,
+            ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> mtcChannelReader,
+            ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcChannelWriter,
+            ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> spbChannelReader,
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter)
+                : base(appLifetime, mtcChannelReader, mtcChannelWriter, spbChannelReader, spbChannelWriter)
         {
             
         }

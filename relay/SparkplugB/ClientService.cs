@@ -14,37 +14,68 @@ namespace mtc_spb_relay.SparkplugB
    public class ClientService: IHostedService
    {
       private readonly IHostApplicationLifetime _appLifetime;
-      private ChannelReader<ClientServiceChannelFrame> _channelReader;
+      private ChannelReader<ClientServiceInboundChannelFrame> _channelReader;
+      private ChannelWriter<ClientServiceOutboundChannelFrame> _channelWriter;
       
       private SparkplugNode _client = null;
       private readonly ClientServiceOptions _serviceOptions;
 
-      private Task _task;
-      private CancellationTokenSource _tokenSource;
-      private CancellationToken _token;
+      private Task _task1;
+      private CancellationTokenSource _tokenSource1;
+      private CancellationToken _token1;
+      
+      private Task _task2;
+      private CancellationTokenSource _tokenSource2;
+      private CancellationToken _token2;
       
       public ClientService(
          IHostApplicationLifetime appLifetime,
          ClientServiceOptions serviceOptions,
-         ChannelReader<ClientServiceChannelFrame> channelReader)
+         ChannelReader<ClientServiceInboundChannelFrame> channelReader,
+         ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter)
       {
          _appLifetime = appLifetime;
          _serviceOptions = serviceOptions;
          _channelReader = channelReader;
+         _channelWriter = channelWriter;
       }
       
       public Task StartAsync(CancellationToken cancellationToken)
       {
          _appLifetime.ApplicationStarted.Register(() =>
          {
-            _tokenSource = new CancellationTokenSource();
-            _token = _tokenSource.Token;
+            _tokenSource1 = new CancellationTokenSource();
+            _token1 = _tokenSource1.Token;
             
-            _task = Task.Run(async () =>
+            _tokenSource2 = new CancellationTokenSource();
+            _token2 = _tokenSource2.Token;
+            
+            _task1 = Task.Run(async () =>
             {
                try
                {
-                  while (!_token.IsCancellationRequested)
+                  while (!_token1.IsCancellationRequested)
+                  {
+                     await Task.Yield();
+                  }
+               }
+               catch (Exception ex)
+               {
+                  Console.WriteLine("SparkplugB.ClientService CLIENT ERROR");
+                  Console.WriteLine(ex);
+               }
+               finally
+               {
+                  Console.WriteLine("SparkplugB.ClientService CLIENT Stopping");
+                  _appLifetime.StopApplication();
+               }
+            }, _token1);
+            
+            _task2 = Task.Run(async () =>
+            {
+               try
+               {
+                  while (!_token2.IsCancellationRequested)
                   {
                      while (await _channelReader.WaitToReadAsync())
                      {
@@ -57,15 +88,15 @@ namespace mtc_spb_relay.SparkplugB
                }
                catch (Exception ex)
                {
-                  Console.WriteLine("SparkplugB.ClientService ERROR");
+                  Console.WriteLine("SparkplugB.ClientService CHANNEL_READER ERROR");
                   Console.WriteLine(ex);
                }
                finally
                {
-                  Console.WriteLine("SparkplugB.ClientService Stopping");
+                  Console.WriteLine("SparkplugB.ClientService CHANNEL_READER Stopping");
                   _appLifetime.StopApplication();
                }
-            }, _token);
+            }, _token2);
          });
 
          return Task.CompletedTask;
@@ -75,13 +106,14 @@ namespace mtc_spb_relay.SparkplugB
       {
          Console.WriteLine("SparkplugB.ClientService Stop");
          
-         _tokenSource.Cancel();
-         Task.WaitAny(_task);
+         _tokenSource1.Cancel();
+         _tokenSource2.Cancel();
+         Task.WaitAll(_task1, _task2);
          
          return Task.CompletedTask;
       }
 
-      void processFrame(ClientServiceChannelFrame frame)
+      void processFrame(ClientServiceInboundChannelFrame frame)
       {
          Console.WriteLine(frame.Type);
 

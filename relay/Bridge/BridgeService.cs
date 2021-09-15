@@ -11,20 +11,30 @@ namespace mtc_spb_relay.Bridge
     public class BridgeService : IHostedService
     {
         private readonly IHostApplicationLifetime _appLifetime;
-        private ChannelReader<MTConnect.ClientServiceChannelFrame> _mtcChannelReader;
-        private ChannelWriter<SparkplugB.ClientServiceChannelFrame> _spbChannelWriter;
+        private ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> _mtcChannelReader;
+        private ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcChannelWriter;
+        private ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> _spbChannelReader;
+        private ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> _spbChannelWriter;
         
-        private Task _task;
-        private CancellationTokenSource _tokenSource;
-        private CancellationToken _token;
+        private Task _task1;
+        private CancellationTokenSource _tokenSource1;
+        private CancellationToken _token1;
+        
+        private Task _task2;
+        private CancellationTokenSource _tokenSource2;
+        private CancellationToken _token2;
         
         public BridgeService(
             IHostApplicationLifetime appLifetime,
-            ChannelReader<MTConnect.ClientServiceChannelFrame> mtcChannelReader,
-            ChannelWriter<SparkplugB.ClientServiceChannelFrame> spbChannelWriter)
+            ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> mtcChannelReader,
+            ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcChannelWriter,
+            ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> spbChannelReader,
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter)
         {
             _appLifetime = appLifetime;
             _mtcChannelReader = mtcChannelReader;
+            _mtcChannelWriter = mtcChannelWriter;
+            _spbChannelReader = spbChannelReader;
             _spbChannelWriter = spbChannelWriter;
         }
 
@@ -32,37 +42,66 @@ namespace mtc_spb_relay.Bridge
         {
             _appLifetime.ApplicationStarted.Register(() =>
             {
-                _tokenSource = new CancellationTokenSource();
-                _token = _tokenSource.Token;
+                _tokenSource1 = new CancellationTokenSource();
+                _token1 = _tokenSource1.Token;
+                _tokenSource2 = new CancellationTokenSource();
+                _token2 = _tokenSource2.Token;
 
                 OnServiceStart();
                 
-                _task = Task.Run(async () =>
+                _task1 = Task.Run(async () =>
                 {
                     try
                     {
-                        while (!_token.IsCancellationRequested)
+                        while (!_token1.IsCancellationRequested)
                         {
                             while (await _mtcChannelReader.WaitToReadAsync())
                             {
                                 await foreach (var frame in _mtcChannelReader.ReadAllAsync())
                                 {
-                                    await processFrame(frame);
+                                    await processMtcFrame(frame);
                                 }
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("BridgeService ERROR");
+                        Console.WriteLine("BridgeService MTC ERROR");
                         Console.WriteLine(ex);
                     }
                     finally
                     {
-                        Console.WriteLine("BridgeService Stopping");
+                        Console.WriteLine("BridgeService MTC Stopping");
                         _appLifetime.StopApplication();
                     }
-                }, _token);
+                }, _token1);
+                
+                _task2 = Task.Run(async () =>
+                {
+                    try
+                    {
+                        while (!_token2.IsCancellationRequested)
+                        {
+                            while (await _spbChannelReader.WaitToReadAsync())
+                            {
+                                await foreach (var frame in _spbChannelReader.ReadAllAsync())
+                                {
+                                    await processSpbFrame(frame);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("BridgeService SPB ERROR");
+                        Console.WriteLine(ex);
+                    }
+                    finally
+                    {
+                        Console.WriteLine("BridgeService SPB Stopping");
+                        _appLifetime.StopApplication();
+                    }
+                }, _token2);
             });
 
             return Task.CompletedTask;
@@ -73,54 +112,60 @@ namespace mtc_spb_relay.Bridge
             Console.WriteLine("BridgeService Stop");
 
             OnServiceStop();
-            _tokenSource.Cancel();
-            Task.WaitAny(_task);
+            _tokenSource1.Cancel();
+            _tokenSource2.Cancel();
+            Task.WaitAll(_task1, _task2);
             
             return Task.CompletedTask;
         }
 
-        async Task processFrame(MTConnect.ClientServiceChannelFrame frame)
+        async Task processMtcFrame(MTConnect.ClientServiceOutboundChannelFrame frame)
         {
             Console.WriteLine(frame.Type);
 
             switch (frame.Type)
             {
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.UNKNOWN:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.UNKNOWN:
 
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.ERROR:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.ERROR:
                     await OnMTConnectServiceError(frame.Payload.ex);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.PROBE_COMPLETED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.PROBE_COMPLETED:
                     await OnMTConnectProbeCompleted(frame.Payload.client, frame.Payload.xml);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.PROBE_FAILED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.PROBE_FAILED:
                     await OnMTConnectProbeFailed(frame.Payload.client, frame.Payload.ex);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.CURRENT_COMPLETED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.CURRENT_COMPLETED:
                     await OnMTConnectCurrentCompleted(frame.Payload.client, frame.Payload.xml);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.CURRENT_FAILED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.CURRENT_FAILED:
                     await OnMTConnectCurrentFailed(frame.Payload.client, frame.Payload.ex);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.SAMPLE_COMPLETED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.SAMPLE_COMPLETED:
                     await OnMTConnectSampleCompleted(frame.Payload.client, frame.Payload.xml);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.SAMPLE_FAILED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.SAMPLE_FAILED:
                     await OnMTConnectSampleFailed(frame.Payload.client, frame.Payload.ex);
                     break;
                 
-                case MTConnect.ClientServiceChannelFrame.FrameTypeEnum.DATA_CHANGED:
+                case MTConnect.ClientServiceOutboundChannelFrame.FrameTypeEnum.DATA_CHANGED:
                     await OnMTConnectDataChanged(frame.Payload.client, frame.Payload.xml, frame.Payload.poll);
                     break;
             }
+        }
+
+        async Task processSpbFrame(SparkplugB.ClientServiceOutboundChannelFrame frame)
+        {
+
         }
 
         protected virtual void OnServiceStart()

@@ -14,19 +14,26 @@ namespace mtc_spb_relay.MTConnect
       
       private MTConnectClient _client = null;
       private readonly ClientServiceOptions _serviceOptions;
-      private ChannelWriter<ClientServiceChannelFrame> _channelWriter;
+      private ChannelReader<ClientServiceInboundChannelFrame> _channelReader;
+      private ChannelWriter<ClientServiceOutboundChannelFrame> _channelWriter;
 
-      private Task _task;
-      private CancellationTokenSource _tokenSource;
-      private CancellationToken _token;
+      private Task _task1;
+      private CancellationTokenSource _tokenSource1;
+      private CancellationToken _token1;
+      
+      private Task _task2;
+      private CancellationTokenSource _tokenSource2;
+      private CancellationToken _token2;
       
       public ClientService(
          IHostApplicationLifetime appLifetime,
          ClientServiceOptions serviceOptions,
-         ChannelWriter<ClientServiceChannelFrame> channelWriter)
+         ChannelReader<ClientServiceInboundChannelFrame> channelReader,
+         ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter)
       {
          _appLifetime = appLifetime;
          _serviceOptions = serviceOptions;
+         _channelReader = channelReader;
          _channelWriter = channelWriter;
       }
       
@@ -34,10 +41,13 @@ namespace mtc_spb_relay.MTConnect
       {
          _appLifetime.ApplicationStarted.Register(() =>
          {
-            _tokenSource = new CancellationTokenSource();
-            _token = _tokenSource.Token;
+            _tokenSource1 = new CancellationTokenSource();
+            _token1 = _tokenSource1.Token;
             
-            _task = Task.Run(async () =>
+            _tokenSource2 = new CancellationTokenSource();
+            _token2 = _tokenSource2.Token;
+            
+            _task1 = Task.Run(async () =>
             {
                try
                {
@@ -59,22 +69,48 @@ namespace mtc_spb_relay.MTConnect
                }
                catch (Exception ex)
                {
-                  Console.WriteLine("MTConnect.ClientService ERROR");
+                  Console.WriteLine("MTConnect.ClientService CLIENT ERROR");
                   Console.WriteLine(ex);
                   
-                  await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+                  await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
                   {
-                     Type = ClientServiceChannelFrame.FrameTypeEnum.ERROR,
+                     Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.ERROR,
                      Payload = new { ex }
                   });
                }
                finally
                {
-                  Console.WriteLine("MTConnect.ClientService Stopping");
-                  _channelWriter.Complete();
+                  Console.WriteLine("MTConnect.ClientService CLIENT Stopping");
                   _appLifetime.StopApplication();
                }
-            }, _token);
+            }, _token1);
+            
+            _task2 = Task.Run(async () =>
+            {
+               try
+               {
+                  while (!_token2.IsCancellationRequested)
+                  {
+                     while (await _channelReader.WaitToReadAsync())
+                     {
+                        await foreach (var frame in _channelReader.ReadAllAsync())
+                        {
+                           await processMtcFrame(frame);
+                        }
+                     }
+                  }
+               }
+               catch (Exception ex)
+               {
+                  Console.WriteLine("MTConnect.ClientService CHANNEL_READER ERROR");
+                  Console.WriteLine(ex);
+               }
+               finally
+               {
+                  Console.WriteLine("MTConnect.ClientService CHANNEL_READER Stopping");
+                  _appLifetime.StopApplication();
+               }
+            }, _token2);
          });
 
          return Task.CompletedTask;
@@ -84,17 +120,23 @@ namespace mtc_spb_relay.MTConnect
       {
          Console.WriteLine("MTConnect.ClientService Stop");
          
-         _tokenSource.Cancel();
-         Task.WaitAny(_task);
+         _tokenSource1.Cancel();
+         _tokenSource2.Cancel();
+         Task.WaitAll(_task1, _task2);
          
          return Task.CompletedTask;
       }
-      
+
+      async Task processMtcFrame(ClientServiceInboundChannelFrame frame)
+      {
+
+      }
+
       private async Task _onProbeCompleted(IMTConnectClient client, XDocument xml)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.PROBE_COMPLETED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.PROBE_COMPLETED,
             Payload = new { client, xml }
          });
          
@@ -103,7 +145,7 @@ namespace mtc_spb_relay.MTConnect
             
          await client.GetCurrent();
 
-         while (!_token.IsCancellationRequested)
+         while (!_token1.IsCancellationRequested)
          {
             var sampleSuccess = await client.GetSample();
             await Task.Delay(sampleSuccess ? _serviceOptions.PollIntervalMs : _serviceOptions.RetryIntervalMs);
@@ -112,9 +154,9 @@ namespace mtc_spb_relay.MTConnect
 
       private async Task _onProbeFailed(IMTConnectClient client, Exception ex)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.PROBE_FAILED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.PROBE_FAILED,
             Payload = new { client, ex }
          });
          
@@ -124,18 +166,18 @@ namespace mtc_spb_relay.MTConnect
 
       private async Task _onCurrentCompleted(IMTConnectClient client, XDocument xml)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.CURRENT_COMPLETED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.CURRENT_COMPLETED,
             Payload = new { client, xml }
          });
       }
       
       private async Task _onCurrentFailed(IMTConnectClient client, Exception ex)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.CURRENT_FAILED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.CURRENT_FAILED,
             Payload = new { client, ex }
          });
          
@@ -145,27 +187,27 @@ namespace mtc_spb_relay.MTConnect
       
       private async Task _onSampleCompleted(IMTConnectClient client, XDocument xml)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.SAMPLE_COMPLETED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.SAMPLE_COMPLETED,
             Payload = new { client, xml }
          });
       }
       
       private async Task _onSampleFailed(IMTConnectClient client, Exception ex)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.SAMPLE_FAILED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.SAMPLE_FAILED,
             Payload = new { client, ex }
          });
       }
 
       private async Task _onDataChanged(IMTConnectClient client, XDocument xml, MTConnectClient.SamplePollResult poll)
       {
-         await _channelWriter.WriteAsync(new ClientServiceChannelFrame()
+         await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
          {
-            Type = ClientServiceChannelFrame.FrameTypeEnum.DATA_CHANGED,
+            Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.DATA_CHANGED,
             Payload = new { client, xml, poll }
          });
       }

@@ -26,14 +26,14 @@ namespace mtc_spb_relay
             await Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
-                    /*
+                    
                     services.AddHostedService<TerminatorService>();
 
                     services.AddSingleton(sp => new TerminatorService.TerminatorServiceOptions()
                     {
                         TerminateInMs = 5000
                     });
-                    */
+                    
                     
                     services.AddHostedService<Bridge.Example01>();
                     
@@ -49,16 +49,6 @@ namespace mtc_spb_relay
                         ClientId = Guid.NewGuid().ToString()
                     });
                     
-                    services.AddSingleton<Channel<SparkplugB.ClientServiceChannelFrame>>(
-                        Channel.CreateUnbounded<SparkplugB.ClientServiceChannelFrame>(
-                            new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
-
-                    services.AddSingleton<ChannelWriter<SparkplugB.ClientServiceChannelFrame>>(
-                        sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceChannelFrame>>().Writer);
-                    
-                    services.AddSingleton<ChannelReader<SparkplugB.ClientServiceChannelFrame>>(
-                        sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceChannelFrame>>().Reader);
-                    
                     services.AddHostedService<MTConnect.ClientService>();
                     
                     services.AddSingleton(sp => new MTConnect.ClientServiceOptions()
@@ -69,17 +59,53 @@ namespace mtc_spb_relay
                         SupressDataItemChangeOnCurrent = true
                     });
                     
-                    services.AddSingleton<Channel<MTConnect.ClientServiceChannelFrame>>(
-                        Channel.CreateUnbounded<MTConnect.ClientServiceChannelFrame>(
-                            new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
-
-                    services.AddSingleton<ChannelWriter<MTConnect.ClientServiceChannelFrame>>(
-                        sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceChannelFrame>>().Writer);
+                    addChannels(services);
                     
-                    services.AddSingleton<ChannelReader<MTConnect.ClientServiceChannelFrame>>(
-                        sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceChannelFrame>>().Reader);
                 })
                 .RunConsoleAsync();
+        }
+
+        static void addChannels(IServiceCollection services)
+        {
+            services.AddSingleton<Channel<SparkplugB.ClientServiceOutboundChannelFrame>>(
+                Channel.CreateUnbounded<SparkplugB.ClientServiceOutboundChannelFrame>(
+                    new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
+
+            services.AddSingleton<ChannelWriter<SparkplugB.ClientServiceOutboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceOutboundChannelFrame>>().Writer);
+                    
+            services.AddSingleton<ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceOutboundChannelFrame>>().Reader);
+                    
+            services.AddSingleton<Channel<SparkplugB.ClientServiceInboundChannelFrame>>(
+                Channel.CreateUnbounded<SparkplugB.ClientServiceInboundChannelFrame>(
+                    new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
+
+            services.AddSingleton<ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceInboundChannelFrame>>().Writer);
+                    
+            services.AddSingleton<ChannelReader<SparkplugB.ClientServiceInboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceInboundChannelFrame>>().Reader);
+            
+            services.AddSingleton<Channel<MTConnect.ClientServiceOutboundChannelFrame>>(
+                Channel.CreateUnbounded<MTConnect.ClientServiceOutboundChannelFrame>(
+                    new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
+
+            services.AddSingleton<ChannelWriter<MTConnect.ClientServiceOutboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceOutboundChannelFrame>>().Writer);
+                    
+            services.AddSingleton<ChannelReader<MTConnect.ClientServiceOutboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceOutboundChannelFrame>>().Reader);
+                    
+            services.AddSingleton<Channel<MTConnect.ClientServiceInboundChannelFrame>>(
+                Channel.CreateUnbounded<MTConnect.ClientServiceInboundChannelFrame>(
+                    new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
+
+            services.AddSingleton<ChannelWriter<MTConnect.ClientServiceInboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceInboundChannelFrame>>().Writer);
+                    
+            services.AddSingleton<ChannelReader<MTConnect.ClientServiceInboundChannelFrame>>(
+                sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceInboundChannelFrame>>().Reader);
         }
     }
 }

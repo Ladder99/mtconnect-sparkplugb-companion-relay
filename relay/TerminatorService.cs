@@ -20,12 +20,26 @@ namespace mtc_spb_relay
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly TerminatorServiceOptions _options;
         
+        private ChannelWriter<MTConnect.ClientServiceOutboundChannelFrame> _mtcOutChannelWriter;
+        private ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcInChannelWriter;
+        private ChannelWriter<SparkplugB.ClientServiceOutboundChannelFrame> _spbOutChannelWriter;
+        private ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> _spbInChannelWriter;
+        
         public TerminatorService(
             IHostApplicationLifetime appLifetime,
-            TerminatorServiceOptions options)
+            TerminatorServiceOptions options,
+            ChannelWriter<MTConnect.ClientServiceOutboundChannelFrame> mtcOutChannelWriter,
+            ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcInChannelWriter,
+            ChannelWriter<SparkplugB.ClientServiceOutboundChannelFrame> spbOutChannelWriter,
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbInChannelWriter)
         {
             _appLifetime = appLifetime;
             _options = options;
+
+            _mtcOutChannelWriter = mtcOutChannelWriter;
+            _mtcInChannelWriter = mtcInChannelWriter;
+            _spbOutChannelWriter = spbOutChannelWriter;
+            _spbInChannelWriter = spbInChannelWriter;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -37,6 +51,11 @@ namespace mtc_spb_relay
                     try
                     {
                         await Task.Delay(_options.TerminateInMs);
+                        
+                        _mtcOutChannelWriter.Complete();
+                        _mtcInChannelWriter.Complete();
+                        _spbOutChannelWriter.Complete();
+                        _spbInChannelWriter.Complete();
                     }
                     catch (Exception ex)
                     {
