@@ -5,7 +5,9 @@ namespace mtc_spb_relay.SparkplugB
         public enum FrameTypeEnum
         {
             UNKNOWN,
-            ERROR
+            ERROR,
+            NODE_BIRTH,
+            NODE_DEATH
         }
 
         public FrameTypeEnum Type { get; set; }

@@ -11,10 +11,10 @@ namespace mtc_spb_relay.Bridge
     public class BridgeService : IHostedService
     {
         private readonly IHostApplicationLifetime _appLifetime;
-        private ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> _mtcChannelReader;
-        private ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcChannelWriter;
-        private ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> _spbChannelReader;
-        private ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> _spbChannelWriter;
+        protected ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> _mtcChannelReader;
+        protected ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcChannelWriter;
+        protected ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> _spbChannelReader;
+        protected ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> _spbChannelWriter;
         
         private Task _task1;
         private CancellationTokenSource _tokenSource1;

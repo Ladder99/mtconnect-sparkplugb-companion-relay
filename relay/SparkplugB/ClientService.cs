@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -18,8 +19,9 @@ namespace mtc_spb_relay.SparkplugB
       private ChannelWriter<ClientServiceOutboundChannelFrame> _channelWriter;
       
       private SparkplugNode _client = null;
-      private readonly ClientServiceOptions _serviceOptions;
 
+      private readonly CancellationTokenSource CancellationTokenSource = new ();
+      
       private Task _task1;
       private CancellationTokenSource _tokenSource1;
       private CancellationToken _token1;
@@ -30,12 +32,10 @@ namespace mtc_spb_relay.SparkplugB
       
       public ClientService(
          IHostApplicationLifetime appLifetime,
-         ClientServiceOptions serviceOptions,
          ChannelReader<ClientServiceInboundChannelFrame> channelReader,
          ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter)
       {
          _appLifetime = appLifetime;
-         _serviceOptions = serviceOptions;
          _channelReader = channelReader;
          _channelWriter = channelWriter;
       }
@@ -81,7 +81,7 @@ namespace mtc_spb_relay.SparkplugB
                      {
                         await foreach (var frame in _channelReader.ReadAllAsync())
                         {
-                           processFrame(frame);
+                           await processFrame(frame);
                         }
                      }
                   }
@@ -113,24 +113,57 @@ namespace mtc_spb_relay.SparkplugB
          return Task.CompletedTask;
       }
 
-      void processFrame(ClientServiceInboundChannelFrame frame)
+      async Task processFrame(ClientServiceInboundChannelFrame frame)
       {
          Console.WriteLine(frame.Type);
 
          switch (frame.Type)
          {
-
+            case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH:
+               await CreateNode(frame.Payload.options, null, frame.Payload.groupId, frame.Payload.nodeId);
+               break;
+            
+            case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH:
+               await KillNode();
+               break;
          }
       }
 
-      private void CreateNode()
+      async Task CreateNode(ClientServiceOptions options, List<VersionBData.Metric> metrics, string groupId, string nodeId)
       {
-         
+         if (_client == null)
+         {
+            _client = new SparkplugNode(metrics);
+         }
+
+         if (!_client.IsConnected)
+         {
+            var nodeOptions = new SparkplugNodeOptions(
+               options.BrokerAddress,
+               options.BrokerPort,
+               options.ClientId,
+               options.Username,
+               options.Password,
+               options.UseTls,
+               "scada1",
+               groupId,
+               nodeId,
+               options.ReconnectInterval,
+               null,
+               null,
+               CancellationTokenSource.Token);
+
+
+            await _client.Start(nodeOptions);
+         }
       }
 
-      private void CreateDevice()
+      async Task KillNode()
       {
-         
+         if (_client != null)
+         {
+            await _client.Stop();
+         }
       }
    }
 }

@@ -26,23 +26,24 @@ namespace mtc_spb_relay
             await Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
-                    
+                    /*
                     services.AddHostedService<TerminatorService>();
 
                     services.AddSingleton(sp => new TerminatorService.TerminatorServiceOptions()
                     {
                         TerminateInMs = 5000
                     });
+                    */
                     
-                    
-                    services.AddHostedService<Bridge.Example01>();
+                    //services.AddHostedService<Bridge.Example01>();
+                    services.AddHostedService<Bridge.Example02>();
                     
                     services.AddHostedService<SparkplugB.ClientService>();
                     
                     services.AddSingleton(sp => new SparkplugB.ClientServiceOptions()
                     {
                         BrokerAddress = "10.20.30.114",
-                        Port = 1883,
+                        BrokerPort = 1883,
                         UseTls = false,
                         Username = "admin",
                         Password = "password",

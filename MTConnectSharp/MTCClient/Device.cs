@@ -10,6 +10,8 @@ namespace MTConnectSharp
    /// </summary>
    public class Device : MTCItemBase, IDevice
 	{
+		public string UUID { get; private set; }
+		
 		/// <summary>
 		/// Description of the device
 		/// </summary>
@@ -72,6 +74,7 @@ namespace MTConnectSharp
 			IsAgent = xElem?.Name.LocalName == "Agent";
 			
 			// Populate basic fields
+			UUID = ParseUtility.GetAttribute(xElem, "uuid");
 			Id = ParseUtility.GetAttribute(xElem, "id");
 			Name = ParseUtility.GetAttribute(xElem, "name");
 
@@ -88,6 +91,26 @@ namespace MTConnectSharp
 			_dataItems.AddRange(ParseUtility.GetDataItems(xElem));
 			_components.AddRange(ParseUtility.GetComponents(xElem));
 		}
+      }
+      
+      public IDataItem GetDataItem(string category, string type, bool topLevel = true)
+      {
+	      return DataItems.Single(di => di.Category == category && di.Type == type);
+      }
+
+      public IDataItem GetEvent(string type, bool topLevel = true)
+      {
+	      return GetDataItem("EVENT", type, topLevel);
+      }
+      
+      public string GetEventValue(string type, bool topLevel = true)
+      {
+	      return GetDataItem("EVENT", type, topLevel).CurrentSample.Value;
+      }
+
+      public bool IsEventAvailable(string type, bool topLevel = true)
+      {
+	      return GetEventValue(type, topLevel) == "AVAILABLE";
       }
 	}
 }

@@ -58,6 +58,8 @@ namespace MTConnectSharp
 		/// </summary>
 		public TimeSpan UpdateInterval { get; set; }
 
+		public string Sender { get; private set; }
+		
 		/// <summary>
 		/// Devices on the connected agent
 		/// </summary>
@@ -117,6 +119,11 @@ namespace MTConnectSharp
 
 			_devices = new ObservableCollection<Device>();
 			Devices = new ReadOnlyObservableCollection<Device>(_devices);
+		}
+
+		public IDevice GetAgent()
+		{
+			return Devices.Single(d => d.IsAgent);
 		}
 
 		/// <summary>
@@ -251,6 +258,12 @@ namespace MTConnectSharp
 		private XDocument ParseProbeResponse(IRestResponse response)
 		{
 			var xdoc = XDocument.Load(new StringReader(response.Content));
+
+			Sender = xdoc
+				.Descendants()
+				.Single(d => d.Name.LocalName == "Header")
+				.Attributes()
+				.Single(a => a.Name.LocalName == "sender").Value;
 			
 			if (_devices.Any())
 				_devices.Clear();

@@ -8,6 +8,7 @@ namespace MTConnectSharp
    public interface IMTConnectClient
 	{
 		string AgentUri { get; set; }
+		string Sender { get; }
 		Task<bool> GetProbe();
 		Task StartStreaming();
 		void StopStreaming();
@@ -21,6 +22,8 @@ namespace MTConnectSharp
    public interface IIMTConnectClient
    {
 	   string AgentUri { get; set; }
+	   string Sender { get; }
 	   ReadOnlyObservableCollection<Device> Devices { get; }
+	   IDevice GetAgent();
    }
 }

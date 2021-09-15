@@ -14,6 +14,9 @@ using Newtonsoft.Json.Linq;
 
 namespace mtc_spb_relay.Bridge
 {
+    /// <summary>
+    /// Connect to generic MQTT server and publish components and data items when MTC probe completes.
+    /// </summary>
     public class Example01: BridgeService
     {
         
