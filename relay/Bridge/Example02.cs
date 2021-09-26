@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -19,17 +21,49 @@ namespace mtc_spb_relay.Bridge
             ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> mtcChannelReader,
             ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcChannelWriter,
             ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> spbChannelReader,
-            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter)
-                : base(appLifetime, mtcChannelReader, mtcChannelWriter, spbChannelReader, spbChannelWriter)
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter,
+            ChannelWriter<bool> tsChannelWriter)
+                : base(appLifetime, mtcChannelReader, mtcChannelWriter, spbChannelReader, spbChannelWriter, tsChannelWriter)
         {
             _spbOptions = spbOptions;
         }
 
+        protected override Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSpbMetricMapper()
+        {
+            return base.DefineSpbMetricMapper();
+        }
+
+        protected override void ResolveMtConnectDataItem(
+            List<dynamic> list, 
+            string path, 
+            MTConnectSharp.IDevice device, 
+            MTConnectSharp.Component component,
+            ReadOnlyObservableCollection<MTConnectSharp.DataItem> dataItems, 
+            MTConnectSharp.DataItem dataItem)
+        {
+            base.ResolveMtConnectDataItem(list, path, device, component, dataItems, dataItem);
+        }
+
+        protected override void ResolveMtConnectComponent(
+            List<dynamic> list, 
+            string path, 
+            MTConnectSharp.IDevice device, 
+            ReadOnlyObservableCollection<MTConnectSharp.Component> components,
+            MTConnectSharp.Component component)
+        {
+            base.ResolveMtConnectComponent(list, path, device, components, component);
+        }
+
+        protected override string ResolveMTConnectPath(string path, MTConnectSharp.Component component)
+        {
+            return base.ResolveMTConnectPath(path, component);
+        }
+
         async Task updateNode(MTConnectSharp.IIMTConnectClient client)
         {
-            if (client.GetAgent().IsEventAvailable("AVAILABILITY"))
+            if (!client.GetAgent().IsEventAvailable("AVAILABILITY"))
             {
-                await _spbChannelWriter.WriteAsync(new SparkplugB.ClientServiceInboundChannelFrame()
+                await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                 {
                     Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH,
                     Payload = new
@@ -37,19 +71,21 @@ namespace mtc_spb_relay.Bridge
                         options = _spbOptions,
                         groupId = client.Sender,
                         nodeId = client.GetAgent().UUID,
+                        mapper = DefineSpbMetricMapper(),
+                        data = WalkMTConnectDevice(client.GetAgent())
                     }
                 });
             }
             else
             {
-                await _spbChannelWriter.WriteAsync(new SparkplugB.ClientServiceInboundChannelFrame()
+                await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                 {
                     Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH,
                     Payload = new {  }
                 });
             }
         }
-        
+
         protected override void OnServiceStart()
         {
             

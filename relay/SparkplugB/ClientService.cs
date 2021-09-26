@@ -17,6 +17,7 @@ namespace mtc_spb_relay.SparkplugB
       private readonly IHostApplicationLifetime _appLifetime;
       private ChannelReader<ClientServiceInboundChannelFrame> _channelReader;
       private ChannelWriter<ClientServiceOutboundChannelFrame> _channelWriter;
+      private ChannelWriter<bool> _tsChannelWriter;
       
       private SparkplugNode _client = null;
 
@@ -33,11 +34,13 @@ namespace mtc_spb_relay.SparkplugB
       public ClientService(
          IHostApplicationLifetime appLifetime,
          ChannelReader<ClientServiceInboundChannelFrame> channelReader,
-         ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter)
+         ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter,
+         ChannelWriter<bool> tsChannelWriter)
       {
          _appLifetime = appLifetime;
          _channelReader = channelReader;
          _channelWriter = channelWriter;
+         _tsChannelWriter = tsChannelWriter;
       }
       
       public Task StartAsync(CancellationToken cancellationToken)
@@ -120,7 +123,16 @@ namespace mtc_spb_relay.SparkplugB
          switch (frame.Type)
          {
             case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH:
-               await CreateNode(frame.Payload.options, null, frame.Payload.groupId, frame.Payload.nodeId);
+               List<dynamic> datas = frame.Payload.data;
+               Func<dynamic, SparkplugNet.VersionB.Data.Metric> mapper = frame.Payload.mapper;
+               List<VersionBData.Metric> metrics = new List<VersionBData.Metric>();
+
+               foreach (dynamic data in datas)
+               {
+                  metrics.Add(mapper(data));
+               }
+               
+               await CreateNode(frame.Payload.options, metrics, frame.Payload.groupId, frame.Payload.nodeId);
                break;
             
             case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH:
@@ -155,6 +167,8 @@ namespace mtc_spb_relay.SparkplugB
 
 
             await _client.Start(nodeOptions);
+
+            await _client.PublishMetrics(metrics);
          }
       }
 
@@ -162,7 +176,10 @@ namespace mtc_spb_relay.SparkplugB
       {
          if (_client != null)
          {
-            await _client.Stop();
+            if (_client.IsConnected)
+            {
+               await _client.Stop();  
+            }
          }
       }
    }

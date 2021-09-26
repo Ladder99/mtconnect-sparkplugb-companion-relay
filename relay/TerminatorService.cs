@@ -24,6 +24,7 @@ namespace mtc_spb_relay
         private ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcInChannelWriter;
         private ChannelWriter<SparkplugB.ClientServiceOutboundChannelFrame> _spbOutChannelWriter;
         private ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> _spbInChannelWriter;
+        private ChannelReader<bool> _tsInChannelReader;
         
         public TerminatorService(
             IHostApplicationLifetime appLifetime,
@@ -31,7 +32,8 @@ namespace mtc_spb_relay
             ChannelWriter<MTConnect.ClientServiceOutboundChannelFrame> mtcOutChannelWriter,
             ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcInChannelWriter,
             ChannelWriter<SparkplugB.ClientServiceOutboundChannelFrame> spbOutChannelWriter,
-            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbInChannelWriter)
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbInChannelWriter,
+            ChannelReader<bool> tsInChannelReader)
         {
             _appLifetime = appLifetime;
             _options = options;
@@ -40,6 +42,7 @@ namespace mtc_spb_relay
             _mtcInChannelWriter = mtcInChannelWriter;
             _spbOutChannelWriter = spbOutChannelWriter;
             _spbInChannelWriter = spbInChannelWriter;
+            _tsInChannelReader = tsInChannelReader;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -50,7 +53,18 @@ namespace mtc_spb_relay
                 {
                     try
                     {
-                        await Task.Delay(_options.TerminateInMs);
+                        if(_options.TerminateInMs > 0)
+                            await Task.Delay(_options.TerminateInMs);
+                        else
+                        {
+                            while (await _tsInChannelReader.WaitToReadAsync())
+                            {
+                                await foreach (var frame in _tsInChannelReader.ReadAllAsync())
+                                {
+                                    await Task.Yield();
+                                }
+                            }
+                        }
                         
                         _mtcOutChannelWriter.Complete();
                         _mtcInChannelWriter.Complete();

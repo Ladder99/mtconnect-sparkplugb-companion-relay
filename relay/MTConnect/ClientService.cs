@@ -16,6 +16,7 @@ namespace mtc_spb_relay.MTConnect
       private readonly ClientServiceOptions _serviceOptions;
       private ChannelReader<ClientServiceInboundChannelFrame> _channelReader;
       private ChannelWriter<ClientServiceOutboundChannelFrame> _channelWriter;
+      private ChannelWriter<bool> _tsChannelWriter;
 
       private Task _task1;
       private CancellationTokenSource _tokenSource1;
@@ -29,12 +30,14 @@ namespace mtc_spb_relay.MTConnect
          IHostApplicationLifetime appLifetime,
          ClientServiceOptions serviceOptions,
          ChannelReader<ClientServiceInboundChannelFrame> channelReader,
-         ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter)
+         ChannelWriter<ClientServiceOutboundChannelFrame> channelWriter,
+         ChannelWriter<bool> tsChannelWriter)
       {
          _appLifetime = appLifetime;
          _serviceOptions = serviceOptions;
          _channelReader = channelReader;
          _channelWriter = channelWriter;
+         _tsChannelWriter = tsChannelWriter;
       }
       
       public Task StartAsync(CancellationToken cancellationToken)
@@ -71,12 +74,19 @@ namespace mtc_spb_relay.MTConnect
                {
                   Console.WriteLine("MTConnect.ClientService CLIENT ERROR");
                   Console.WriteLine(ex);
-                  
-                  await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
+
+                  try
                   {
-                     Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.ERROR,
-                     Payload = new { ex }
-                  });
+                     await _channelWriter.WriteAsync(new ClientServiceOutboundChannelFrame()
+                     {
+                        Type = ClientServiceOutboundChannelFrame.FrameTypeEnum.ERROR,
+                        Payload = new { ex }
+                     });
+                  }
+                  catch
+                  {
+                     
+                  }
                }
                finally
                {

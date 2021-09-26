@@ -1,10 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.Hosting;
-using MTConnectSharp;
 
 namespace mtc_spb_relay.Bridge
 {
@@ -15,6 +16,7 @@ namespace mtc_spb_relay.Bridge
         protected ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcChannelWriter;
         protected ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> _spbChannelReader;
         protected ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> _spbChannelWriter;
+        private ChannelWriter<bool> _tsChannelWriter;
         
         private Task _task1;
         private CancellationTokenSource _tokenSource1;
@@ -29,13 +31,15 @@ namespace mtc_spb_relay.Bridge
             ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> mtcChannelReader,
             ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcChannelWriter,
             ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> spbChannelReader,
-            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter)
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter,
+            ChannelWriter<bool> tsChannelWriter)
         {
             _appLifetime = appLifetime;
             _mtcChannelReader = mtcChannelReader;
             _mtcChannelWriter = mtcChannelWriter;
             _spbChannelReader = spbChannelReader;
             _spbChannelWriter = spbChannelWriter;
+            _tsChannelWriter = tsChannelWriter;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -119,6 +123,78 @@ namespace mtc_spb_relay.Bridge
             return Task.CompletedTask;
         }
 
+        protected virtual Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSpbMetricMapper()
+        {
+            return o => new SparkplugNet.VersionB.Data.Metric()
+            {
+                Name = o.name,
+                DataType = (uint)SparkplugNet.VersionB.Data.DataType.String,
+                StringValue = o.value
+            };
+        }
+        
+        protected virtual void ResolveMtConnectDataItem(
+            List<dynamic> list, 
+            string path, 
+            MTConnectSharp.IDevice device,
+            MTConnectSharp.Component component,
+            ReadOnlyObservableCollection<MTConnectSharp.DataItem> dataItems,
+            MTConnectSharp.DataItem dataItem)
+        {
+            list.Add(new
+            {
+                name = $"{path}/{dataItem.Id}",
+                value = dataItem.CurrentSample.Value
+            });
+        }
+        
+        protected virtual void ResolveMtConnectComponent(
+            List<dynamic> list, 
+            string path, 
+            MTConnectSharp.IDevice device,
+            ReadOnlyObservableCollection<MTConnectSharp.Component> components,
+            MTConnectSharp.Component component)
+        {
+            
+        }
+
+        protected virtual string ResolveMTConnectPath(string path, MTConnectSharp.Component component)
+        {
+            return $"/{component.Id}";
+        }
+        
+        protected List<dynamic> WalkMTConnectDevice(MTConnectSharp.IDevice device)
+        {
+            List<dynamic> list = new List<dynamic>();
+            Action<string, ReadOnlyObservableCollection<MTConnectSharp.Component>> walkComponents = null;
+            Action<string, MTConnectSharp.Component, ReadOnlyObservableCollection<MTConnectSharp.DataItem>> walkDataItems = null;
+            
+            walkDataItems = (path,component, dataItems) =>
+            {
+                foreach (var dataItem in dataItems)
+                {
+                    ResolveMtConnectDataItem(list, path, device, component, dataItems, dataItem);
+                }
+            };
+            
+            walkComponents = (path, components) =>
+            {
+                foreach (var component in components)
+                {
+                    path += ResolveMTConnectPath(path, component);
+                    walkDataItems($"{path}", component, component.DataItems);
+                    
+                    ResolveMtConnectComponent(list, $"{path}", device, components, component);
+                    walkComponents($"{path}", component.Components);
+                }
+            };
+
+            walkDataItems("", null, device.DataItems);
+            walkComponents("", device.Components);
+            
+            return list;
+        }
+        
         async Task processMtcFrame(MTConnect.ClientServiceOutboundChannelFrame frame)
         {
             Console.WriteLine(frame.Type);
@@ -168,6 +244,11 @@ namespace mtc_spb_relay.Bridge
 
         }
 
+        protected async virtual Task SendToSpB(SparkplugB.ClientServiceInboundChannelFrame frame)
+        {
+            await _spbChannelWriter.WriteAsync(frame);
+        }
+        
         protected virtual void OnServiceStart()
         {
             
@@ -217,7 +298,7 @@ namespace mtc_spb_relay.Bridge
             Console.WriteLine(ex);
         }
         
-        protected async virtual Task OnMTConnectDataChanged(MTConnectSharp.IIMTConnectClient client, XDocument xml, MTConnectClient.SamplePollResult poll)
+        protected async virtual Task OnMTConnectDataChanged(MTConnectSharp.IIMTConnectClient client, XDocument xml, MTConnectSharp.MTConnectClient.SamplePollResult poll)
         {
             Console.WriteLine($"sequence: {poll.StartingSequence} -> {poll.EndingSequence}");
             

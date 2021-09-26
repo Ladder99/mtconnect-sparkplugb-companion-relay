@@ -26,17 +26,14 @@ namespace mtc_spb_relay
             await Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
-                    /*
-                    services.AddHostedService<TerminatorService>();
-
-                    services.AddSingleton(sp => new TerminatorService.TerminatorServiceOptions()
-                    {
-                        TerminateInMs = 5000
-                    });
-                    */
+                    
                     
                     //services.AddHostedService<Bridge.Example01>();
                     services.AddHostedService<Bridge.Example02>();
+                    
+                    
+                    
+                    // SparkplugB.ClientService
                     
                     services.AddHostedService<SparkplugB.ClientService>();
                     
@@ -50,6 +47,9 @@ namespace mtc_spb_relay
                         ClientId = Guid.NewGuid().ToString()
                     });
                     
+                    
+                    // MTConnect.ClientService
+                    
                     services.AddHostedService<MTConnect.ClientService>();
                     
                     services.AddSingleton(sp => new MTConnect.ClientServiceOptions()
@@ -60,6 +60,21 @@ namespace mtc_spb_relay
                         SupressDataItemChangeOnCurrent = true
                     });
                     
+                    
+                    // TerminatorService
+                    
+                    /*
+                        How to stop application: Complete the terminator service inbound channel from any service.
+                            _tsChannelWriter.Complete();
+                    */
+                    
+                    services.AddHostedService<TerminatorService>();
+
+                    services.AddSingleton(sp => new TerminatorService.TerminatorServiceOptions()
+                    {
+                        TerminateInMs = 0   // 0 = do not terminate using timer
+                    });
+                    
                     addChannels(services);
                     
                 })
@@ -68,6 +83,8 @@ namespace mtc_spb_relay
 
         static void addChannels(IServiceCollection services)
         {
+            // SparkplugB.ClientService
+            
             services.AddSingleton<Channel<SparkplugB.ClientServiceOutboundChannelFrame>>(
                 Channel.CreateUnbounded<SparkplugB.ClientServiceOutboundChannelFrame>(
                     new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
@@ -88,6 +105,8 @@ namespace mtc_spb_relay
             services.AddSingleton<ChannelReader<SparkplugB.ClientServiceInboundChannelFrame>>(
                 sp => sp.GetRequiredService<Channel<SparkplugB.ClientServiceInboundChannelFrame>>().Reader);
             
+            // MTConnect.ClientService
+            
             services.AddSingleton<Channel<MTConnect.ClientServiceOutboundChannelFrame>>(
                 Channel.CreateUnbounded<MTConnect.ClientServiceOutboundChannelFrame>(
                     new UnboundedChannelOptions() { SingleReader = true, SingleWriter = true }));
@@ -107,6 +126,18 @@ namespace mtc_spb_relay
                     
             services.AddSingleton<ChannelReader<MTConnect.ClientServiceInboundChannelFrame>>(
                 sp => sp.GetRequiredService<Channel<MTConnect.ClientServiceInboundChannelFrame>>().Reader);
+            
+            // TerminatorService
+            
+            services.AddSingleton<Channel<bool>>(
+                Channel.CreateUnbounded<bool>(
+                    new UnboundedChannelOptions() { SingleReader = true, SingleWriter = false }));
+
+            services.AddSingleton<ChannelWriter<bool>>(
+                sp => sp.GetRequiredService<Channel<bool>>().Writer);
+                    
+            services.AddSingleton<ChannelReader<bool>>(
+                sp => sp.GetRequiredService<Channel<bool>>().Reader);
         }
     }
 }

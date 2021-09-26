@@ -34,8 +34,9 @@ namespace mtc_spb_relay.Bridge
             ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> mtcChannelReader,
             ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> mtcChannelWriter,
             ChannelReader<SparkplugB.ClientServiceOutboundChannelFrame> spbChannelReader,
-            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter)
-                : base(appLifetime, mtcChannelReader, mtcChannelWriter, spbChannelReader, spbChannelWriter)
+            ChannelWriter<SparkplugB.ClientServiceInboundChannelFrame> spbChannelWriter,
+            ChannelWriter<bool> tsChannelWriter)
+                : base(appLifetime, mtcChannelReader, mtcChannelWriter, spbChannelReader, spbChannelWriter, tsChannelWriter)
         {
             
         }
