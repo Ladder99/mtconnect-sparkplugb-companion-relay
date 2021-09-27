@@ -141,7 +141,7 @@ namespace mtc_spb_relay.Bridge
         
         #region MTConnect Runtime Resolvers
         
-        protected virtual Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSpbMetricMapper()
+        protected virtual Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSparkplugBMetricMapper()
         {
             return o => new SparkplugNet.VersionB.Data.Metric()
             {
@@ -176,9 +176,25 @@ namespace mtc_spb_relay.Bridge
             
         }
 
-        protected virtual string ResolveMTConnectPath(string path, MTConnectSharp.IComponent component)
+        protected virtual string ResolveMTConnectPath(
+            string path, 
+            MTConnectSharp.IComponent component)
         {
-            return $"/{component.Id}";
+            return $"{path}/{component.Id}";
+        }
+
+        protected virtual (string, string) ResolveSparkplugBNodeOptions(
+            MTConnectSharp.IIMTConnectClient client,
+            MTConnectSharp.IDevice device)
+        {
+            return (client.Sender, device.UUID);
+        }
+        
+        protected virtual string ResolveSparkplugBDeviceOptions(
+            MTConnectSharp.IIMTConnectClient client,
+            MTConnectSharp.IDevice device)
+        {
+            return device.UUID;
         }
         
         #endregion
@@ -216,7 +232,7 @@ namespace mtc_spb_relay.Bridge
         {
             foreach (var component in components)
             {
-                path += ResolveMTConnectPath(path, component);
+                path = ResolveMTConnectPath(path, component);
                 WalkMTConnectDataItems(list, $"{path}", device, component, component.DataItems);
                     
                 ResolveMtConnectComponent(list, $"{path}", device, components, component);

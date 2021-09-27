@@ -1,19 +1,20 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.Hosting;
+using MTConnectSharp;
 
 namespace mtc_spb_relay.Bridge
 {
     /// <summary>
-    /// SpB NBIRTH, NDATA, NDEATH
+    /// Basic NODE and DEVICE test.
     /// </summary>
     public class Example02: BridgeService
     {
+        #region Service
+        
         public Example02(
             IHostApplicationLifetime appLifetime,
             SparkplugB.ClientServiceOptions spbOptions,
@@ -27,127 +28,172 @@ namespace mtc_spb_relay.Bridge
             _spbOptions = spbOptions;
         }
 
-        private SparkplugB.ClientServiceOptions _spbOptions;
+        #endregion
         
-        async Task updateSpbNode(MTConnectSharp.IIMTConnectClient client)
+        #region SparkplugB
+        
+        private SparkplugB.ClientServiceOptions _spbOptions;
+
+        async Task updateSpbDevicesBirth(MTConnectSharp.IIMTConnectClient client)
         {
-            var agentAvail = client.GetAgent().IsEventAvailable("AVAILABILITY");
-            
-            if (agentAvail.Item1 != null && !agentAvail.Item2)
+            foreach (var device in client.Devices.Where(d => !d.IsAgent))
             {
-                await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
-                {
-                    Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH,
-                    Payload = new
-                    {
-                        options = _spbOptions,
-                        groupId = client.Sender,
-                        nodeId = client.GetAgent().UUID,
-                        mapper = DefineSpbMetricMapper(),
-                        data = WalkMTConnectDevice(client.GetAgent())
-                    }
-                });
+                var deviceAvail = device.IsEventAvailable("AVAILABILITY");
 
-                foreach (var device in client.Devices.Where(d => !d.IsAgent))
+                if (deviceAvail.Item1 != null && deviceAvail.Item2)
                 {
-                    var deviceAvail = device.IsEventAvailable("AVAILABILITY");
-
-                    if (deviceAvail.Item1 != null && deviceAvail.Item2)
+                    await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                     {
-                        await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+                        Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_BIRTH,
+                        Payload = new
                         {
-                            Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_BIRTH,
-                            Payload = new
-                            {
-                                deviceId = device.UUID,
-                                mapper = DefineSpbMetricMapper(),
-                                data = WalkMTConnectDevice(device)
-                            }
-                        });
-                    }
+                            deviceId = ResolveSparkplugBDeviceOptions(client, device),
+                            mapper = DefineSparkplugBMetricMapper(),
+                            data = WalkMTConnectDevice(device)
+                        }
+                    });
                 }
-            }
-            else
-            {
-                foreach (var device in client.Devices.Where(d => !d.IsAgent))
-                {
-                    var deviceAvail = device.IsEventAvailable("AVAILABILITY");
-
-                    if (deviceAvail.Item1 != null && deviceAvail.Item2)
-                    {
-                        await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
-                        {
-                            Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DEATH,
-                            Payload = new
-                            {
-                                deviceId = device.UUID
-                            }
-                        });
-                    }
-                }
-                
-                await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
-                {
-                    Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH,
-                    Payload = new {  }
-                });
             }
         }
 
-        async Task updateSpbNode(MTConnectSharp.IIMTConnectClient client, MTConnectSharp.MTConnectClient.SamplePollResult poll)
+        async Task updateSpbDevicesDeath(MTConnectSharp.IIMTConnectClient client)
         {
-            var slimClient = CreateMTConnectSlimClient(client, poll);
+            foreach (var device in client.Devices.Where(d => !d.IsAgent))
+            {
+                var deviceAvail = device.IsEventAvailable("AVAILABILITY");
 
-            var avail = slimClient.GetAgent().IsEventAvailable("AVAILABILITY");
+                if (deviceAvail.Item1 != null && deviceAvail.Item2)
+                {
+                    await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+                    {
+                        Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DEATH,
+                        Payload = new
+                        {
+                            deviceId = ResolveSparkplugBDeviceOptions(client, device)
+                        }
+                    });
+                }
+            }
+        }
+        
+        async Task updateSpbNodeBirth(MTConnectSharp.IIMTConnectClient client)
+        {
+            var nodeOptions = ResolveSparkplugBNodeOptions(client, client.GetAgent());
+                
+            await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+            {
+                Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH,
+                Payload = new
+                {
+                    options = _spbOptions,
+                    groupId = nodeOptions.Item1,
+                    nodeId = nodeOptions.Item2,
+                    mapper = DefineSparkplugBMetricMapper(),
+                    data = WalkMTConnectDevice(client.GetAgent())
+                }
+            });
+        }
+        
+        async Task updateSpbNodeDeath(MTConnectSharp.IIMTConnectClient client)
+        {
+            await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+            {
+                Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH,
+                Payload = new {  }
+            });
+        }
+
+        async Task updateSpbNodeData(MTConnectSharp.IIMTConnectClient client)
+        {
+            var avail = client.GetAgent().IsEventAvailable("AVAILABILITY");
             
-            var frame = new SparkplugB.ClientServiceInboundChannelFrame()
+            // TODO: also handle birth/death
+            
+            await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
             {
                 Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DATA,
                 Payload = new
                 {
-                    options = _spbOptions,
-                    groupId = client.Sender,
-                    nodeId = slimClient.GetAgent().UUID,
-                    mapper = DefineSpbMetricMapper(),
-                    data = WalkMTConnectDevice(slimClient.GetAgent())
+                    mapper = DefineSparkplugBMetricMapper(),
+                    data = WalkMTConnectDevice(client.GetAgent())
                 }
-            };
-
-            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(frame.Payload.data));
-            await SendToSpB(frame);
-            
-            foreach (var device in slimClient.Devices.Where(d => !d.IsAgent))
+            });
+        }
+        
+        async Task updateSpbDevicesData(MTConnectSharp.IIMTConnectClient client)
+        {
+            foreach (var device in client.Devices.Where(d => !d.IsAgent))
             {
                 var deviceAvail = device.IsEventAvailable("AVAILABILITY");
                 
-                //TODO also handle birth/death
+                // TODO: also handle birth/death
                 
                 await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                 {
                     Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DATA,
                     Payload = new
                     {
-                        deviceId = device.UUID,
-                        mapper = DefineSpbMetricMapper(),
+                        deviceId = ResolveSparkplugBDeviceOptions(client, device),
+                        mapper = DefineSparkplugBMetricMapper(),
                         data = WalkMTConnectDevice(device)
                     }
                 });
             }
         }
         
+        #endregion
+        
+        #region MTConnect
+        
         protected override async Task OnMTConnectCurrentCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
         {
-            await updateSpbNode(client);
+            var agentAvail = client.GetAgent().IsEventAvailable("AVAILABILITY");
+            
+            if (agentAvail.Item1 != null && !agentAvail.Item2)
+            {
+                await updateSpbNodeBirth(client);
+
+                await updateSpbDevicesBirth(client);
+            }
+            else
+            {
+                await updateSpbDevicesDeath(client);
+
+                await updateSpbNodeDeath(client);
+            }
+        }
+
+        protected override async Task OnMTConnectCurrentFailed(IIMTConnectClient client, Exception ex)
+        {
+            // call to /current happens only once during startup.  spb is not initialized yet.  nothing to do.
+            // mtc client will continue retrying /current call
+
+            return;
         }
 
         protected override async Task OnMTConnectSampleCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
         {
-            
+            // TODO: if we issue spb DEATH certs in SampleFailed, then we need to issue spb BIRTH certs here.
+            return;
+        }
+
+        protected override async Task OnMTConnectSampleFailed(IIMTConnectClient client, Exception ex)
+        {
+            // call to /sample occurs at defined intervals.
+            // TODO: should we issue spb DEATH certs here?
+
+            return;
         }
 
         protected override async Task OnMTConnectDataChanged(MTConnectSharp.IIMTConnectClient client, XDocument xml, MTConnectSharp.MTConnectClient.SamplePollResult poll)
         {
-            await updateSpbNode(client, poll);
+            var slimClient = CreateMTConnectSlimClient(client, poll);
+
+            await updateSpbNodeData(slimClient);
+
+            await updateSpbDevicesData(slimClient);
         }
+        
+        #endregion
     }
 }
