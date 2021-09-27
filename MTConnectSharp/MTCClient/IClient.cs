@@ -7,7 +7,7 @@ namespace MTConnectSharp
 {
    public interface IMTConnectClient
 	{
-		string AgentUri { get; set; }
+		string AgentUri { get; }
 		string Sender { get; }
 		Task<bool> GetProbe();
 		Task StartStreaming();
@@ -15,15 +15,15 @@ namespace MTConnectSharp
 		Task<bool> GetCurrent();
 		Task<bool> GetSample();
 		void SuppressDataItemChangeOnCurrent(bool suppress);
-		ReadOnlyObservableCollection<Device> Devices { get; }
+		ReadOnlyObservableCollection<IDevice> Devices { get; }
 		TimeSpan UpdateInterval { get; set; }
 	}
    
    public interface IIMTConnectClient
    {
-	   string AgentUri { get; set; }
+	   string AgentUri { get; }
 	   string Sender { get; }
-	   ReadOnlyObservableCollection<Device> Devices { get; }
+	   ReadOnlyObservableCollection<IDevice> Devices { get; }
 	   IDevice GetAgent();
    }
 }

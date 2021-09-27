@@ -5,8 +5,8 @@ namespace MTConnectSharp
 {
    public interface IDevice
 	{
-		ReadOnlyObservableCollection<Component> Components { get; }
-		ReadOnlyObservableCollection<DataItem> DataItems { get; }
+		ReadOnlyObservableCollection<IComponent> Components { get; }
+		ReadOnlyObservableCollection<IDataItem> DataItems { get; }
 		string UUID { get; }
 		string Description { get; }
 		string Manufacturer { get; }
@@ -18,7 +18,7 @@ namespace MTConnectSharp
 		XElement Model { get; }
 		IDataItem GetDataItem(string category, string type, bool topLevel = true);
 		IDataItem GetEvent(string type, bool topLevel = true);
-		string GetEventValue(string type, bool topLevel = true);
-		bool IsEventAvailable(string type, bool topLevel = true);
+		(IDataItem, string?) GetEventValue(string type, bool topLevel = true);
+		(IDataItem, bool) IsEventAvailable(string type, bool topLevel = true);
 	}
 }

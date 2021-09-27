@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -123,20 +124,39 @@ namespace mtc_spb_relay.SparkplugB
          switch (frame.Type)
          {
             case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH:
-               List<dynamic> datas = frame.Payload.data;
-               Func<dynamic, SparkplugNet.VersionB.Data.Metric> mapper = frame.Payload.mapper;
-               List<VersionBData.Metric> metrics = new List<VersionBData.Metric>();
+               var nodeBirthMetrics = (frame.Payload.data as List<dynamic>)?
+                  .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
 
-               foreach (dynamic data in datas)
-               {
-                  metrics.Add(mapper(data));
-               }
-               
-               await CreateNode(frame.Payload.options, metrics, frame.Payload.groupId, frame.Payload.nodeId);
+               await CreateNode(frame.Payload.options, nodeBirthMetrics, frame.Payload.groupId, frame.Payload.nodeId);
+               break;
+            
+            case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DATA:
+               var nodeMetrics = (frame.Payload.data as List<dynamic>)?
+                  .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
+
+               await UpdateNode(nodeMetrics);
                break;
             
             case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH:
                await KillNode();
+               break;
+            
+            case ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_BIRTH:
+               var deviceBirthMetrics = (frame.Payload.data as List<dynamic>)?
+                  .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
+
+               await CreateDevice(frame.Payload.deviceId, deviceBirthMetrics);
+               break;
+            
+            case ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DATA:
+               var deviceMetrics = (frame.Payload.data as List<dynamic>)?
+                  .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
+
+               await CreateDevice(frame.Payload.deviceId, deviceMetrics);
+               break;
+            
+            case ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DEATH:
+               KillDevice(frame.Payload.deviceId);
                break;
          }
       }
@@ -165,13 +185,21 @@ namespace mtc_spb_relay.SparkplugB
                null,
                CancellationTokenSource.Token);
 
-
             await _client.Start(nodeOptions);
-
-            await _client.PublishMetrics(metrics);
          }
       }
 
+      async Task UpdateNode(List<VersionBData.Metric> metrics)
+      {
+         if (_client != null)
+         {
+            if (_client.IsConnected)
+            {
+               await _client.PublishMetrics(metrics); 
+            }
+         }
+      }
+      
       async Task KillNode()
       {
          if (_client != null)
@@ -179,6 +207,39 @@ namespace mtc_spb_relay.SparkplugB
             if (_client.IsConnected)
             {
                await _client.Stop();  
+            }
+         }
+      }
+
+      async Task CreateDevice(string id, List<VersionBData.Metric> metrics)
+      {
+         if (_client != null)
+         {
+            if (_client.IsConnected)
+            {
+               await _client.PublishDeviceBirthMessage(metrics, id);
+            }
+         }
+      }
+
+      async Task UpdateDevice(string id, List<VersionBData.Metric> metrics)
+      {
+         if (_client != null)
+         {
+            if (_client.IsConnected)
+            {
+               await _client.PublishDeviceData(metrics, id);
+            }
+         }
+      }
+
+      async Task KillDevice(string id)
+      {
+         if (_client != null)
+         {
+            if (_client.IsConnected)
+            {
+               await _client.PublishDeviceDeathMessage(id);
             }
          }
       }

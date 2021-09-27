@@ -7,7 +7,11 @@ namespace mtc_spb_relay.SparkplugB
             UNKNOWN,
             ERROR,
             NODE_BIRTH,
-            NODE_DEATH
+            NODE_DATA,
+            NODE_DEATH,
+            DEVICE_BIRTH,
+            DEVICE_DATA,
+            DEVICE_DEATH
         }
 
         public FrameTypeEnum Type { get; set; }

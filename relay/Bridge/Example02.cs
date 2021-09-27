@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -9,12 +10,10 @@ using Microsoft.Extensions.Hosting;
 namespace mtc_spb_relay.Bridge
 {
     /// <summary>
-    /// SpB NBIRTH, NDEATH
+    /// SpB NBIRTH, NDATA, NDEATH
     /// </summary>
     public class Example02: BridgeService
     {
-        private SparkplugB.ClientServiceOptions _spbOptions;
-        
         public Example02(
             IHostApplicationLifetime appLifetime,
             SparkplugB.ClientServiceOptions spbOptions,
@@ -28,40 +27,13 @@ namespace mtc_spb_relay.Bridge
             _spbOptions = spbOptions;
         }
 
-        protected override Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSpbMetricMapper()
+        private SparkplugB.ClientServiceOptions _spbOptions;
+        
+        async Task updateSpbNode(MTConnectSharp.IIMTConnectClient client)
         {
-            return base.DefineSpbMetricMapper();
-        }
-
-        protected override void ResolveMtConnectDataItem(
-            List<dynamic> list, 
-            string path, 
-            MTConnectSharp.IDevice device, 
-            MTConnectSharp.Component component,
-            ReadOnlyObservableCollection<MTConnectSharp.DataItem> dataItems, 
-            MTConnectSharp.DataItem dataItem)
-        {
-            base.ResolveMtConnectDataItem(list, path, device, component, dataItems, dataItem);
-        }
-
-        protected override void ResolveMtConnectComponent(
-            List<dynamic> list, 
-            string path, 
-            MTConnectSharp.IDevice device, 
-            ReadOnlyObservableCollection<MTConnectSharp.Component> components,
-            MTConnectSharp.Component component)
-        {
-            base.ResolveMtConnectComponent(list, path, device, components, component);
-        }
-
-        protected override string ResolveMTConnectPath(string path, MTConnectSharp.Component component)
-        {
-            return base.ResolveMTConnectPath(path, component);
-        }
-
-        async Task updateNode(MTConnectSharp.IIMTConnectClient client)
-        {
-            if (!client.GetAgent().IsEventAvailable("AVAILABILITY"))
+            var agentAvail = client.GetAgent().IsEventAvailable("AVAILABILITY");
+            
+            if (agentAvail.Item1 != null && !agentAvail.Item2)
             {
                 await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                 {
@@ -75,9 +47,45 @@ namespace mtc_spb_relay.Bridge
                         data = WalkMTConnectDevice(client.GetAgent())
                     }
                 });
+
+                foreach (var device in client.Devices.Where(d => !d.IsAgent))
+                {
+                    var deviceAvail = device.IsEventAvailable("AVAILABILITY");
+
+                    if (deviceAvail.Item1 != null && deviceAvail.Item2)
+                    {
+                        await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+                        {
+                            Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_BIRTH,
+                            Payload = new
+                            {
+                                deviceId = device.UUID,
+                                mapper = DefineSpbMetricMapper(),
+                                data = WalkMTConnectDevice(device)
+                            }
+                        });
+                    }
+                }
             }
             else
             {
+                foreach (var device in client.Devices.Where(d => !d.IsAgent))
+                {
+                    var deviceAvail = device.IsEventAvailable("AVAILABILITY");
+
+                    if (deviceAvail.Item1 != null && deviceAvail.Item2)
+                    {
+                        await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+                        {
+                            Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DEATH,
+                            Payload = new
+                            {
+                                deviceId = device.UUID
+                            }
+                        });
+                    }
+                }
+                
                 await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                 {
                     Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DEATH,
@@ -86,54 +94,60 @@ namespace mtc_spb_relay.Bridge
             }
         }
 
-        protected override void OnServiceStart()
+        async Task updateSpbNode(MTConnectSharp.IIMTConnectClient client, MTConnectSharp.MTConnectClient.SamplePollResult poll)
         {
+            var slimClient = CreateMTConnectSlimClient(client, poll);
+
+            var avail = slimClient.GetAgent().IsEventAvailable("AVAILABILITY");
             
-        }
+            var frame = new SparkplugB.ClientServiceInboundChannelFrame()
+            {
+                Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_DATA,
+                Payload = new
+                {
+                    options = _spbOptions,
+                    groupId = client.Sender,
+                    nodeId = slimClient.GetAgent().UUID,
+                    mapper = DefineSpbMetricMapper(),
+                    data = WalkMTConnectDevice(slimClient.GetAgent())
+                }
+            };
 
-        protected override void OnServiceStop()
-        {
-            base.OnServiceStop();
-        }
-
-        protected override Task OnMTConnectServiceError(Exception ex)
-        {
-            return base.OnMTConnectServiceError(ex);
-        }
-
-        protected override async Task OnMTConnectProbeCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
-        {
+            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(frame.Payload.data));
+            await SendToSpB(frame);
             
+            foreach (var device in slimClient.Devices.Where(d => !d.IsAgent))
+            {
+                var deviceAvail = device.IsEventAvailable("AVAILABILITY");
+                
+                //TODO also handle birth/death
+                
+                await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
+                {
+                    Type = SparkplugB.ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_DATA,
+                    Payload = new
+                    {
+                        deviceId = device.UUID,
+                        mapper = DefineSpbMetricMapper(),
+                        data = WalkMTConnectDevice(device)
+                    }
+                });
+            }
         }
-
-        protected override Task OnMTConnectProbeFailed(MTConnectSharp.IIMTConnectClient client, Exception ex)
-        {
-            return base.OnMTConnectProbeFailed(client, ex);
-        }
-
+        
         protected override async Task OnMTConnectCurrentCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
         {
-            await updateNode(client);
-        }
-
-        protected override Task OnMTConnectCurrentFailed(MTConnectSharp.IIMTConnectClient client, Exception ex)
-        {
-            return base.OnMTConnectCurrentFailed(client, ex);
+            await updateSpbNode(client);
         }
 
         protected override async Task OnMTConnectSampleCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
         {
-            await updateNode(client);
+            
         }
 
-        protected override Task OnMTConnectSampleFailed(MTConnectSharp.IIMTConnectClient client, Exception ex)
+        protected override async Task OnMTConnectDataChanged(MTConnectSharp.IIMTConnectClient client, XDocument xml, MTConnectSharp.MTConnectClient.SamplePollResult poll)
         {
-            return base.OnMTConnectSampleFailed(client, ex);
-        }
-
-        protected override Task OnMTConnectDataChanged(MTConnectSharp.IIMTConnectClient client, XDocument xml, MTConnectSharp.MTConnectClient.SamplePollResult poll)
-        {
-            return base.OnMTConnectDataChanged(client, xml, poll);
+            await updateSpbNode(client, poll);
         }
     }
 }

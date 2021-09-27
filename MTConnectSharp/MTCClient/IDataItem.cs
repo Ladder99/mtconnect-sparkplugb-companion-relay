@@ -18,5 +18,6 @@ namespace MTConnectSharp
       string Units { get; }
       string NativeUnits { get; }
       XElement Model { get; }
+      void AddSample(DataItemSample newSample);
    }
 }

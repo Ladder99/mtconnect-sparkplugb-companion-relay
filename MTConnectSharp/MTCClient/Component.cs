@@ -4,7 +4,7 @@ using System.Xml.Linq;
 
 namespace MTConnectSharp
 {
-   /// <summary>
+	/// <summary>
    /// Represents a component in the probe response document
    /// </summary>
    public class Component : MTCItemBase, IComponent
@@ -22,17 +22,17 @@ namespace MTConnectSharp
 		/// <summary>
 		/// The DataItems which belong to this component
 		/// </summary>
-		private ObservableCollection<DataItem> _dataItems;
+		private ObservableCollection<IDataItem> _dataItems;
 
 		/// <summary>
 		/// The Components which belong to this component
 		/// </summary>
-		private ObservableCollection<Component> _components;
+		private ObservableCollection<IComponent> _components;
 
 		/// <summary>
 		/// Array of the DataItems collection for COM Interop
 		/// </summary>
-		public ReadOnlyObservableCollection<DataItem> DataItems
+		public ReadOnlyObservableCollection<IDataItem> DataItems
 		{
          get; private set;
 		}
@@ -40,7 +40,7 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Array of the Components collection for COM Interop
 		/// </summary>
-		public ReadOnlyObservableCollection<Component> Components
+		public ReadOnlyObservableCollection<IComponent> Components
 		{
          get;
          private set;
@@ -62,11 +62,11 @@ namespace MTConnectSharp
 			
 			NativeName = ParseUtility.GetAttribute(xmlComponent, "nativeName");
 
-			_dataItems = new ObservableCollection<DataItem>(ParseUtility.GetDataItems(xmlComponent));
-			DataItems = new ReadOnlyObservableCollection<DataItem>(_dataItems);
+			_dataItems = new ObservableCollection<IDataItem>(ParseUtility.GetDataItems(xmlComponent));
+			DataItems = new ReadOnlyObservableCollection<IDataItem>(_dataItems);
 
-			_components = new ObservableCollection<Component>(ParseUtility.GetComponents(xmlComponent));
-			Components = new ReadOnlyObservableCollection<Component>(_components);
+			_components = new ObservableCollection<IComponent>(ParseUtility.GetComponents(xmlComponent));
+			Components = new ReadOnlyObservableCollection<IComponent>(_components);
 		}
 	}
 }

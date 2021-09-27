@@ -1,11 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Xml.Linq;
 
 namespace MTConnectSharp
 {
-   /// <summary>
+	/// <summary>
    /// Represents a device in the MTConnect probe response
    /// </summary>
    public class Device : MTCItemBase, IDevice
@@ -15,36 +16,36 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Description of the device
 		/// </summary>
-		public string Description { get; set; }
+		public string Description { get; private set; }
 
 		/// <summary>
 		/// Manufacturer of the device
 		/// </summary>
-		public string Manufacturer { get; set; }
+		public string Manufacturer { get; private set; }
 
 		/// <summary>
 		/// Serial number of the device
 		/// </summary>
-		public string SerialNumber { get; set; }
+		public string SerialNumber { get; private set; }
 		
-		public bool IsAgent { get; set; }
+		public bool IsAgent { get; private set; }
 		
-		public XElement Model { get; set; }
+		public XElement Model { get; private set; }
 
 		/// <summary>
 		/// The DataItems which are direct children of the device
 		/// </summary>
-		private ObservableCollection<DataItem> _dataItems = new ObservableCollection<DataItem>();
+		private ObservableCollection<IDataItem> _dataItems = new ObservableCollection<IDataItem>();
 
 		/// <summary>
 		/// The components which are direct children of the device
 		/// </summary>
-		private ObservableCollection<Component> _components = new ObservableCollection<Component>();
+		private ObservableCollection<IComponent> _components = new ObservableCollection<IComponent>();
 
 		/// <summary>
 		/// Array of the DataItems collection for COM Interop
 		/// </summary>
-		public ReadOnlyObservableCollection<DataItem> DataItems
+		public ReadOnlyObservableCollection<IDataItem> DataItems
 		{
          get;
          private set;
@@ -53,11 +54,11 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Array of the Components collection for COM Interop
 		/// </summary>
-		public ReadOnlyObservableCollection<Component> Components
+		public ReadOnlyObservableCollection<IComponent> Components
 		{
          get;
          private set;
-      }
+		}
 
       /// <summary>
       /// Creates a new device from an MTConnect XML device node
@@ -65,8 +66,8 @@ namespace MTConnectSharp
       /// <param name="xElem">The MTConnect XML node which defines the device</param>
       internal Device(XElement xElem = null) 
       {
-		DataItems = new ReadOnlyObservableCollection<DataItem>(_dataItems);
-		Components = new ReadOnlyObservableCollection<Component>(_components);
+		DataItems = new ReadOnlyObservableCollection<IDataItem>(_dataItems);
+		Components = new ReadOnlyObservableCollection<IComponent>(_components);
 
 		if (xElem?.Name.LocalName == "Device" || xElem?.Name.LocalName == "Agent")
 		{
@@ -95,7 +96,14 @@ namespace MTConnectSharp
       
       public IDataItem GetDataItem(string category, string type, bool topLevel = true)
       {
-	      return DataItems.Single(di => di.Category == category && di.Type == type);
+	      try
+	      {
+		      return DataItems.Single(di => di.Category == category && di.Type == type);
+	      }
+	      catch
+	      {
+		      return null;
+	      }
       }
 
       public IDataItem GetEvent(string type, bool topLevel = true)
@@ -103,14 +111,16 @@ namespace MTConnectSharp
 	      return GetDataItem("EVENT", type, topLevel);
       }
       
-      public string GetEventValue(string type, bool topLevel = true)
+      public (IDataItem,string?) GetEventValue(string type, bool topLevel = true)
       {
-	      return GetDataItem("EVENT", type, topLevel).CurrentSample.Value;
+	      var di = GetDataItem("EVENT", type, topLevel);
+	      return (di, di?.CurrentSample.Value);
       }
 
-      public bool IsEventAvailable(string type, bool topLevel = true)
+      public (IDataItem,bool) IsEventAvailable(string type, bool topLevel = true)
       {
-	      return GetEventValue(type, topLevel) == "AVAILABLE";
+	      var di = GetEventValue(type, topLevel);
+	      return (di.Item1, di.Item2 == "AVAILABLE");
       }
 	}
 }

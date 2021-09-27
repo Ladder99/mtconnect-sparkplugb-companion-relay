@@ -103,7 +103,7 @@ namespace MTConnectSharp
 		/// Adds a sample to the value buffer and removes the oldest value if the buffer is full
 		/// </summary>
 		/// <param name="newSample">The new sample to add</param>
-		internal void AddSample(DataItemSample newSample)
+		public void AddSample(DataItemSample newSample)
 		{
 			_dataItemSamples.Add(newSample);
 			_dataItemSamples.RemoveRange(0, Math.Max(0, _dataItemSamples.Count - BufferSize));

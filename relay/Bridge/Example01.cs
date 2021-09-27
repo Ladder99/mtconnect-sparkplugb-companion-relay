@@ -101,7 +101,7 @@ namespace mtc_spb_relay.Bridge
             }
         }
 
-        async Task PublishComponent(string path, ReadOnlyObservableCollection<MTConnectSharp.Component> components)
+        async Task PublishComponent(string path, ReadOnlyObservableCollection<MTConnectSharp.IComponent> components)
         {
             foreach (var component in components)
             {
@@ -118,7 +118,7 @@ namespace mtc_spb_relay.Bridge
             }
         }
 
-        async Task PublishDataItems(string path, ReadOnlyObservableCollection<MTConnectSharp.DataItem> dataitems)
+        async Task PublishDataItems(string path, ReadOnlyObservableCollection<MTConnectSharp.IDataItem> dataitems)
         {
             foreach (var dataitem in dataitems)
             {

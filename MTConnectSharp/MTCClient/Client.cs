@@ -27,10 +27,10 @@ namespace MTConnectSharp
 			}
 			public long StartingSequence { get; set; }
 			public long EndingSequence { get; set; }
-			public Dictionary<string,DataItem> DataItems { get; set; }
+			public Dictionary<string, IDataItem> DataItems { get; set; }
 			public SamplePollResult()
 			{
-			   DataItems = new Dictionary<string, DataItem>();
+			   DataItems = new Dictionary<string, IDataItem>();
 			}
 		}
 	   
@@ -63,17 +63,17 @@ namespace MTConnectSharp
 		/// <summary>
 		/// Devices on the connected agent
 		/// </summary>
-		public ReadOnlyObservableCollection<Device> Devices
+		public ReadOnlyObservableCollection<IDevice> Devices
 		{
 			get;
 			private set;
 		}
-		private ObservableCollection<Device> _devices;
+		private ObservableCollection<IDevice> _devices;
 
 		/// <summary>
 		/// Dictionary Reference to all data items by id for better performance when streaming
 		/// </summary>
-		private Dictionary<string, DataItem> _dataItemsDictionary = new Dictionary<string,DataItem>(); 
+		private Dictionary<string, IDataItem> _dataItemsDictionary = new Dictionary<string, IDataItem>(); 
 		
 		/// <summary>
 		/// RestSharp RestClient
@@ -117,8 +117,8 @@ namespace MTConnectSharp
 		{
 			UpdateInterval = TimeSpan.FromMilliseconds(2000);
 
-			_devices = new ObservableCollection<Device>();
-			Devices = new ReadOnlyObservableCollection<Device>(_devices);
+			_devices = new ObservableCollection<IDevice>();
+			Devices = new ReadOnlyObservableCollection<IDevice>(_devices);
 		}
 
 		public IDevice GetAgent()
@@ -296,10 +296,10 @@ namespace MTConnectSharp
 		/// </summary>
 		/// <param name="components">Collection of Components</param>
 		/// <returns>Collection of DataItems from passed Component collection</returns>
-		private static List<DataItem> GetAllDataItems(IReadOnlyList<Component> components)
+		private static List<IDataItem> GetAllDataItems(IReadOnlyList<IComponent> components)
 		{
-			var queue = new Queue<Component>(components);
-			var dataItems = new List<DataItem>();
+			var queue = new Queue<IComponent>(components);
+			var dataItems = new List<IDataItem>();
 			while(queue.Count > 0)
 			{
 				var component = queue.Dequeue();

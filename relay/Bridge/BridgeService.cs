@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -11,6 +13,8 @@ namespace mtc_spb_relay.Bridge
 {
     public class BridgeService : IHostedService
     {
+        #region Service
+        
         private readonly IHostApplicationLifetime _appLifetime;
         protected ChannelReader<MTConnect.ClientServiceOutboundChannelFrame> _mtcChannelReader;
         protected ChannelWriter<MTConnect.ClientServiceInboundChannelFrame> _mtcChannelWriter;
@@ -123,6 +127,20 @@ namespace mtc_spb_relay.Bridge
             return Task.CompletedTask;
         }
 
+        protected virtual void OnServiceStart()
+        {
+            
+        }
+
+        protected virtual void OnServiceStop()
+        {
+            
+        }
+        
+        #endregion
+        
+        #region MTConnect Runtime Resolvers
+        
         protected virtual Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSpbMetricMapper()
         {
             return o => new SparkplugNet.VersionB.Data.Metric()
@@ -137,9 +155,9 @@ namespace mtc_spb_relay.Bridge
             List<dynamic> list, 
             string path, 
             MTConnectSharp.IDevice device,
-            MTConnectSharp.Component component,
-            ReadOnlyObservableCollection<MTConnectSharp.DataItem> dataItems,
-            MTConnectSharp.DataItem dataItem)
+            MTConnectSharp.IComponent component,
+            ReadOnlyObservableCollection<MTConnectSharp.IDataItem> dataItems,
+            MTConnectSharp.IDataItem dataItem)
         {
             list.Add(new
             {
@@ -152,48 +170,80 @@ namespace mtc_spb_relay.Bridge
             List<dynamic> list, 
             string path, 
             MTConnectSharp.IDevice device,
-            ReadOnlyObservableCollection<MTConnectSharp.Component> components,
-            MTConnectSharp.Component component)
+            ReadOnlyObservableCollection<MTConnectSharp.IComponent> components,
+            MTConnectSharp.IComponent component)
         {
             
         }
 
-        protected virtual string ResolveMTConnectPath(string path, MTConnectSharp.Component component)
+        protected virtual string ResolveMTConnectPath(string path, MTConnectSharp.IComponent component)
         {
             return $"/{component.Id}";
         }
         
+        #endregion
+
+        #region MTConnect Helpers
+        
         protected List<dynamic> WalkMTConnectDevice(MTConnectSharp.IDevice device)
         {
             List<dynamic> list = new List<dynamic>();
-            Action<string, ReadOnlyObservableCollection<MTConnectSharp.Component>> walkComponents = null;
-            Action<string, MTConnectSharp.Component, ReadOnlyObservableCollection<MTConnectSharp.DataItem>> walkDataItems = null;
             
-            walkDataItems = (path,component, dataItems) =>
-            {
-                foreach (var dataItem in dataItems)
-                {
-                    ResolveMtConnectDataItem(list, path, device, component, dataItems, dataItem);
-                }
-            };
-            
-            walkComponents = (path, components) =>
-            {
-                foreach (var component in components)
-                {
-                    path += ResolveMTConnectPath(path, component);
-                    walkDataItems($"{path}", component, component.DataItems);
-                    
-                    ResolveMtConnectComponent(list, $"{path}", device, components, component);
-                    walkComponents($"{path}", component.Components);
-                }
-            };
-
-            walkDataItems("", null, device.DataItems);
-            walkComponents("", device.Components);
+            WalkMTConnectDataItems(list, "", device, null, device.DataItems);
+            WalkMTConnectComponents(list, "", device, device.Components);
             
             return list;
         }
+        
+        protected void WalkMTConnectDataItems(
+            List<dynamic> list,
+            string path,
+            MTConnectSharp.IDevice device,
+            MTConnectSharp.IComponent component,
+            ReadOnlyObservableCollection<MTConnectSharp.IDataItem> dataItems)
+        {
+            foreach (var dataItem in dataItems)
+            {
+                ResolveMtConnectDataItem(list, path, device, component, dataItems, dataItem);
+            }
+        }
+        
+        protected void WalkMTConnectComponents(
+            List<dynamic> list,
+            string path,
+            MTConnectSharp.IDevice device,
+            ReadOnlyObservableCollection<MTConnectSharp.IComponent> components)
+        {
+            foreach (var component in components)
+            {
+                path += ResolveMTConnectPath(path, component);
+                WalkMTConnectDataItems(list, $"{path}", device, component, component.DataItems);
+                    
+                ResolveMtConnectComponent(list, $"{path}", device, components, component);
+                WalkMTConnectComponents(list, $"{path}", device, component.Components);
+            }
+        }
+
+        protected MTConnectSharp.IIMTConnectClient CreateMTConnectSlimClient(
+            MTConnectSharp.IIMTConnectClient client,
+            MTConnectSharp.MTConnectClient.SamplePollResult poll)
+        {
+            List<MTConnectSharp.IDevice> slimDevices = new List<MTConnectSharp.IDevice>();
+
+            foreach (var device in client.Devices)
+            {
+                slimDevices.Add(
+                    new MTConnectSharp.SlimDevice(
+                        device, 
+                        poll.DataItems.Select(kv => kv.Value).ToList()));
+            }
+
+            return new MTConnectSharp.SlimClient(client, slimDevices);
+        }
+        
+        #endregion
+        
+        #region MTConnect Inbound Frame Processing
         
         async Task processMtcFrame(MTConnect.ClientServiceOutboundChannelFrame frame)
         {
@@ -238,27 +288,7 @@ namespace mtc_spb_relay.Bridge
                     break;
             }
         }
-
-        async Task processSpbFrame(SparkplugB.ClientServiceOutboundChannelFrame frame)
-        {
-
-        }
-
-        protected async virtual Task SendToSpB(SparkplugB.ClientServiceInboundChannelFrame frame)
-        {
-            await _spbChannelWriter.WriteAsync(frame);
-        }
         
-        protected virtual void OnServiceStart()
-        {
-            
-        }
-
-        protected virtual void OnServiceStop()
-        {
-            
-        }
-
         protected async virtual Task OnMTConnectServiceError(Exception ex)
         {
             Console.WriteLine("ERROR!");
@@ -309,5 +339,25 @@ namespace mtc_spb_relay.Bridge
             
             Console.WriteLine("");
         }
+
+        #endregion
+        
+        #region SparkplugB Inbound Frame Processing
+        
+        async Task processSpbFrame(SparkplugB.ClientServiceOutboundChannelFrame frame)
+        {
+
+        }
+
+        #endregion
+        
+        #region SparkplugB Outbound Frame Processing
+        
+        protected async virtual Task SendToSpB(SparkplugB.ClientServiceInboundChannelFrame frame)
+        {
+            await _spbChannelWriter.WriteAsync(frame);
+        }
+        
+        #endregion
     }
 }
