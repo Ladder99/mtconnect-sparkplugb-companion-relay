@@ -55,7 +55,7 @@ namespace MTConnectSharp
 		{
 			Model = xmlComponent;
 			
-			Type = xmlComponent.Name?.ToString() ?? string.Empty;
+			Type = xmlComponent.Name?.LocalName.ToString() ?? string.Empty;
 			Id = ParseUtility.GetAttribute(xmlComponent, "id");
 			Name = ParseUtility.GetAttribute(xmlComponent, "name");
 			if (string.IsNullOrEmpty(Name)) Name = Id;

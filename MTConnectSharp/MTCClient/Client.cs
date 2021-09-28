@@ -59,7 +59,7 @@ namespace MTConnectSharp
 		public TimeSpan UpdateInterval { get; set; }
 
 		public string Sender { get; private set; }
-		
+
 		/// <summary>
 		/// Devices on the connected agent
 		/// </summary>
@@ -384,7 +384,9 @@ namespace MTConnectSharp
 						id = e.Attribute("dataItemId").Value,
 						timestamp = DateTime.Parse(e.Attribute("timestamp").Value, null, 
 							System.Globalization.DateTimeStyles.RoundtripKind),
-						value = e.Value,
+						// TODO: special Condition handling
+						value = new []{"Unavailable", "Normal", "Warning", "Fault"}.Contains(e.Name.LocalName)
+							? e.Name.LocalName.ToUpper() : e.Value,
 						sequence = Convert.ToInt64(e.Attribute("sequence").Value)
 					})
 	               .OrderBy(i => i.sequence)

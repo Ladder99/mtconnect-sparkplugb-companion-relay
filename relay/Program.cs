@@ -29,7 +29,8 @@ namespace mtc_spb_relay
                     
                     
                     //services.AddHostedService<Bridge.Example01>();
-                    services.AddHostedService<Bridge.Example02>();
+                    //services.AddHostedService<Bridge.Example02>();
+                    services.AddHostedService<Bridge.AaronV3>();
                     
                     
                     

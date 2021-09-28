@@ -4,7 +4,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.Hosting;
-using MTConnectSharp;
 
 namespace mtc_spb_relay.Bridge
 {
@@ -34,13 +33,11 @@ namespace mtc_spb_relay.Bridge
         
         private SparkplugB.ClientServiceOptions _spbOptions;
 
-        async Task updateSpbDevicesBirth(MTConnectSharp.IIMTConnectClient client)
+        protected virtual async Task UpdateSpbDevicesBirth(MTConnectSharp.IIMTConnectClient client)
         {
             foreach (var device in client.Devices.Where(d => !d.IsAgent))
             {
-                var deviceAvail = device.IsEventAvailable("AVAILABILITY");
-
-                if (deviceAvail.Item1 != null && deviceAvail.Item2)
+                if (ResolveSparkplugBDeviceBirthCondition(client, device))
                 {
                     await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                     {
@@ -56,13 +53,11 @@ namespace mtc_spb_relay.Bridge
             }
         }
 
-        async Task updateSpbDevicesDeath(MTConnectSharp.IIMTConnectClient client)
+        protected virtual async Task UpdateSpbDevicesDeath(MTConnectSharp.IIMTConnectClient client)
         {
             foreach (var device in client.Devices.Where(d => !d.IsAgent))
             {
-                var deviceAvail = device.IsEventAvailable("AVAILABILITY");
-
-                if (deviceAvail.Item1 != null && deviceAvail.Item2)
+                if (ResolveSparkplugBDeviceDeathCondition(client, device))
                 {
                     await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
                     {
@@ -76,9 +71,9 @@ namespace mtc_spb_relay.Bridge
             }
         }
         
-        async Task updateSpbNodeBirth(MTConnectSharp.IIMTConnectClient client)
+        protected virtual async Task UpdateSpbNodeBirth(MTConnectSharp.IIMTConnectClient client)
         {
-            var nodeOptions = ResolveSparkplugBNodeOptions(client, client.GetAgent());
+            var nodeOptions = ResolveSparkplugBNodeOptions(client);
                 
             await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
             {
@@ -94,7 +89,7 @@ namespace mtc_spb_relay.Bridge
             });
         }
         
-        async Task updateSpbNodeDeath(MTConnectSharp.IIMTConnectClient client)
+        protected virtual async Task UpdateSpbNodeDeath(MTConnectSharp.IIMTConnectClient client)
         {
             await SendToSpB(new SparkplugB.ClientServiceInboundChannelFrame()
             {
@@ -103,7 +98,7 @@ namespace mtc_spb_relay.Bridge
             });
         }
 
-        async Task updateSpbNodeData(MTConnectSharp.IIMTConnectClient client)
+        protected virtual async Task UpdateSpbNodeData(MTConnectSharp.IIMTConnectClient client)
         {
             var avail = client.GetAgent().IsEventAvailable("AVAILABILITY");
             
@@ -120,7 +115,7 @@ namespace mtc_spb_relay.Bridge
             });
         }
         
-        async Task updateSpbDevicesData(MTConnectSharp.IIMTConnectClient client)
+        protected virtual async Task UpdateSpbDevicesData(MTConnectSharp.IIMTConnectClient client)
         {
             foreach (var device in client.Devices.Where(d => !d.IsAgent))
             {
@@ -147,23 +142,22 @@ namespace mtc_spb_relay.Bridge
         
         protected override async Task OnMTConnectCurrentCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
         {
-            var agentAvail = client.GetAgent().IsEventAvailable("AVAILABILITY");
-            
-            if (agentAvail.Item1 != null && !agentAvail.Item2)
+            if (ResolveSparkplugBNodeBirthCondition(client))
             {
-                await updateSpbNodeBirth(client);
+                await UpdateSpbNodeBirth(client);
 
-                await updateSpbDevicesBirth(client);
+                await UpdateSpbDevicesBirth(client);
             }
-            else
+            
+            if (ResolveSparkplugBNodeDeathCondition(client))
             {
-                await updateSpbDevicesDeath(client);
+                await UpdateSpbDevicesDeath(client);
 
-                await updateSpbNodeDeath(client);
+                await UpdateSpbNodeDeath(client);
             }
         }
 
-        protected override async Task OnMTConnectCurrentFailed(IIMTConnectClient client, Exception ex)
+        protected override async Task OnMTConnectCurrentFailed(MTConnectSharp.IIMTConnectClient client, Exception ex)
         {
             // call to /current happens only once during startup.  spb is not initialized yet.  nothing to do.
             // mtc client will continue retrying /current call
@@ -177,7 +171,7 @@ namespace mtc_spb_relay.Bridge
             return;
         }
 
-        protected override async Task OnMTConnectSampleFailed(IIMTConnectClient client, Exception ex)
+        protected override async Task OnMTConnectSampleFailed(MTConnectSharp.IIMTConnectClient client, Exception ex)
         {
             // call to /sample occurs at defined intervals.
             // TODO: should we issue spb DEATH certs here?
@@ -189,9 +183,9 @@ namespace mtc_spb_relay.Bridge
         {
             var slimClient = CreateMTConnectSlimClient(client, poll);
 
-            await updateSpbNodeData(slimClient);
+            await UpdateSpbNodeData(slimClient);
 
-            await updateSpbDevicesData(slimClient);
+            await UpdateSpbDevicesData(slimClient);
         }
         
         #endregion

@@ -50,7 +50,7 @@ namespace MTConnectSharp
         public (IDataItem,bool) IsEventAvailable(string type, bool topLevel = true)
         {
             var di = GetEventValue(type, topLevel);
-            return (di.Item1, di.Item2 == "AVAILABLE");
+            return (di.Item1, di.Item2 != "UNAVAILABLE");
         }
 
         public SlimDevice(IDevice device, List<IDataItem> dataItems)

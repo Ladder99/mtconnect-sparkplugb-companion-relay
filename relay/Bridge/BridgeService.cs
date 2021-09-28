@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.Hosting;
+using Newtonsoft.Json;
 
 namespace mtc_spb_relay.Bridge
 {
@@ -184,10 +184,9 @@ namespace mtc_spb_relay.Bridge
         }
 
         protected virtual (string, string) ResolveSparkplugBNodeOptions(
-            MTConnectSharp.IIMTConnectClient client,
-            MTConnectSharp.IDevice device)
+            MTConnectSharp.IIMTConnectClient client)
         {
-            return (client.Sender, device.UUID);
+            return (client.Sender, client.GetAgent().UUID);
         }
         
         protected virtual string ResolveSparkplugBDeviceOptions(
@@ -195,6 +194,36 @@ namespace mtc_spb_relay.Bridge
             MTConnectSharp.IDevice device)
         {
             return device.UUID;
+        }
+
+        protected virtual bool ResolveSparkplugBDeviceBirthCondition(
+            MTConnectSharp.IIMTConnectClient client,
+            MTConnectSharp.IDevice device)
+        {
+            var avail = device.IsEventAvailable("AVAILABILITY");
+            return avail.Item1 != null && avail.Item2 == true;
+        }
+        
+        protected virtual bool ResolveSparkplugBDeviceDeathCondition(
+            MTConnectSharp.IIMTConnectClient client,
+            MTConnectSharp.IDevice device)
+        {
+            var avail = device.IsEventAvailable("AVAILABILITY");
+            return avail.Item1 == null || avail.Item2 == false;
+        }
+        
+        protected virtual bool ResolveSparkplugBNodeBirthCondition(
+            MTConnectSharp.IIMTConnectClient client)
+        {
+            var avail = client.GetAgent().IsEventAvailable("AVAILABILITY");
+            return avail.Item1 != null && avail.Item2 == true;
+        }
+        
+        protected virtual bool ResolveSparkplugBNodeDeathCondition(
+            MTConnectSharp.IIMTConnectClient client)
+        {
+            var avail = client.GetAgent().IsEventAvailable("AVAILABILITY");
+            return avail.Item1 == null || avail.Item2 == false;
         }
         
         #endregion
@@ -230,9 +259,12 @@ namespace mtc_spb_relay.Bridge
             MTConnectSharp.IDevice device,
             ReadOnlyObservableCollection<MTConnectSharp.IComponent> components)
         {
+            var parentPath = path;
+            
             foreach (var component in components)
             {
-                path = ResolveMTConnectPath(path, component);
+                path = ResolveMTConnectPath(parentPath, component);
+                
                 WalkMTConnectDataItems(list, $"{path}", device, component, component.DataItems);
                     
                 ResolveMtConnectComponent(list, $"{path}", device, components, component);

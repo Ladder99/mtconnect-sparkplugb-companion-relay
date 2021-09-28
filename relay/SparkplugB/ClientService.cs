@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
-
+using Newtonsoft.Json;
 using SparkplugNet.VersionB;
 using SparkplugNet.Core.Node;
 
@@ -126,7 +126,7 @@ namespace mtc_spb_relay.SparkplugB
             case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH:
                var nodeBirthMetrics = (frame.Payload.data as List<dynamic>)?
                   .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
-
+               Console.WriteLine(JsonConvert.SerializeObject(nodeBirthMetrics, Formatting.Indented));
                await CreateNode(frame.Payload.options, nodeBirthMetrics, frame.Payload.groupId, frame.Payload.nodeId);
                break;
             
@@ -144,7 +144,7 @@ namespace mtc_spb_relay.SparkplugB
             case ClientServiceInboundChannelFrame.FrameTypeEnum.DEVICE_BIRTH:
                var deviceBirthMetrics = (frame.Payload.data as List<dynamic>)?
                   .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
-
+               //Console.WriteLine(JsonConvert.SerializeObject(deviceBirthMetrics.Select(m => new { m.Name, m.StringValue}), Formatting.Indented));
                await CreateDevice(frame.Payload.deviceId, deviceBirthMetrics);
                break;
             
