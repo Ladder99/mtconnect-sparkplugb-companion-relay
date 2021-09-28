@@ -126,7 +126,7 @@ namespace mtc_spb_relay.SparkplugB
             case ClientServiceInboundChannelFrame.FrameTypeEnum.NODE_BIRTH:
                var nodeBirthMetrics = (frame.Payload.data as List<dynamic>)?
                   .ConvertAll<SparkplugNet.VersionB.Data.Metric>(data => frame.Payload.mapper(data));
-               Console.WriteLine(JsonConvert.SerializeObject(nodeBirthMetrics, Formatting.Indented));
+               //Console.WriteLine(JsonConvert.SerializeObject(nodeBirthMetrics, Formatting.Indented));
                await CreateNode(frame.Payload.options, nodeBirthMetrics, frame.Payload.groupId, frame.Payload.nodeId);
                break;
             

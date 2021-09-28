@@ -35,6 +35,7 @@ namespace mtc_spb_relay.Bridge
         
         protected override (string, string) ResolveSparkplugBNodeOptions(MTConnectSharp.IIMTConnectClient client)
         {
+            // returns spb group and node_id
             return (_mtcVersion, client.GetAgent().Id);
         }
         
@@ -42,13 +43,25 @@ namespace mtc_spb_relay.Bridge
             MTConnectSharp.IIMTConnectClient client,
             MTConnectSharp.IDevice device)
         {
+            // returns device_id
             return device.UUID;
+        }
+        
+        // TODO: mazak demo agent avail is always unavailable
+        // -- 09/28 not anymore
+        protected override bool ResolveSparkplugBNodeBirthCondition(
+            MTConnectSharp.IIMTConnectClient client)
+        {
+            // is it time to publish node birth?
+            var avail = client.GetAgent().IsEventAvailable("AVAILABILITY");
+            return avail.Item1 != null && avail.Item2 == true;
         }
 
         protected override string ResolveMTConnectPath(
             string path, 
             MTConnectSharp.IComponent component)
         {
+            // create path to mtc component when walking mtc component tree
             return $"{path}/{component.Type}-{component.Id}";
         }
         
@@ -60,23 +73,55 @@ namespace mtc_spb_relay.Bridge
             ReadOnlyObservableCollection<MTConnectSharp.IDataItem> dataItems,
             MTConnectSharp.IDataItem dataItem)
         {
+            // list of mtc data items to be transformed into spb metrics
+            var properties = new List<(string, string)>();
+            
+            properties.Add(("nativeUnits", dataItem.NativeUnits));
+            properties.Add(("Units", dataItem.Units));
+            properties.Add(("cat", "meow"));
+            
             list.Add(new
             {
                 name = $"{path}/{dataItem.Type}-{dataItem.Id}",
-                value = dataItem.CurrentSample.Value
+                value = dataItem.CurrentSample.Value,
+                properties
             });
         }
-        
-        // TODO: mazak demo agent avail is always unavailable
-        protected override bool ResolveSparkplugBNodeBirthCondition(
-            MTConnectSharp.IIMTConnectClient client)
+
+        protected override Func<dynamic, SparkplugNet.VersionB.Data.Metric> DefineSparkplugBMetricMapper()
         {
-            var avail = client.GetAgent().IsEventAvailable("AVAILABILITY");
-            return avail.Item1 != null && avail.Item2 == false;
+            // func to convert mtc data to spb metrics
+            Func<dynamic, SparkplugNet.VersionB.Data.Metric> func = o =>
+            {
+                var ps = new SparkplugNet.VersionB.Data.PropertySet();
+
+                foreach (var property in o.properties)
+                {
+                    ps.Keys.Add(property.Item1);
+
+                    var pv = new SparkplugNet.VersionB.Data.PropertyValue();
+                    pv.Type = (uint)SparkplugNet.VersionB.Data.DataType.String;
+                    pv.StringValue = property.Item2;
+                    ps.Values.Add(pv);
+                }
+                
+                var metric = new SparkplugNet.VersionB.Data.Metric()
+                {
+                    Name = o.name,
+                    DataType = (uint)SparkplugNet.VersionB.Data.DataType.String,
+                    StringValue = o.value,
+                    Properties = ps
+                };
+                
+                return metric;
+            };
+
+            return func;
         }
-        
+
         protected override async Task OnMTConnectProbeCompleted(MTConnectSharp.IIMTConnectClient client, XDocument xml)
         {
+            // get mtc version from probe header
             _mtcVersion = xml
                 .Descendants()
                 .Single(d => d.Name.LocalName == "Header")
