@@ -62,7 +62,7 @@ namespace mtc_spb_relay.Bridge
             MTConnectSharp.IComponent component)
         {
             // create path to mtc component when walking mtc component tree
-            return $"{path}/{component.Type}-{component.Id}";
+            return $"{path}{(string.IsNullOrEmpty(path)?"":"/")}{component.Type}-{component.Id}";
         }
         
         protected override void ResolveMtConnectDataItem(
@@ -78,11 +78,12 @@ namespace mtc_spb_relay.Bridge
             
             properties.Add(("nativeUnits", dataItem.NativeUnits));
             properties.Add(("Units", dataItem.Units));
-            properties.Add(("cat", "meow"));
+            properties.Add(("engUnit", "meow"));
+            properties.Add(("documentation", "how"));
             
             list.Add(new
             {
-                name = $"{path}/{dataItem.Type}-{dataItem.Id}",
+                name = $"{path}{(string.IsNullOrEmpty(path)?"":"/")}{dataItem.Type}-{dataItem.Id}",
                 value = dataItem.CurrentSample.Value,
                 properties
             });

@@ -1,0 +1,57 @@
+@page "/spbapp"
+@inject SpbApplicationService SpbService
+
+<h1>Application</h1>
+
+<p>App state: @currentState</p>
+
+<button class="btn btn-primary" disabled="@(isConnected)" @onclick="Start">Start</button>
+<button class="btn btn-primary" disabled="@(!isConnected)" @onclick="Stop">Stop</button>
+<br/>
+<br/>
+<button class="btn btn-primary" disabled="@(!isConnected)" @onclick="GetKnownMetrics">Known Metrics</button>
+<button class="btn btn-primary" disabled="@(!isConnected)" @onclick="GetNodeStates">Node States</button>
+<button class="btn btn-primary" disabled="@(!isConnected)" @onclick="GetDeviceStates">Device States</button>
+
+
+@code {
+    private bool isConnected = false;
+    private string currentState = "Stopped";
+
+    private dynamic _knownMetrics;
+    private dynamic _nodeStates;
+    private dynamic _deviceStates;
+    
+    private async Task Start()
+    {
+        await SpbService.Start();
+        currentState = "Running";
+        isConnected = true;
+    }
+
+    private async Task Stop()
+    {
+        await SpbService.Stop();
+        currentState = "Stopped";
+        isConnected = false;
+    }
+
+    private void GetNodeStates()
+    {
+        _nodeStates = SpbService.GetNodeStates();
+        Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(_nodeStates));
+    }
+
+    private void GetDeviceStates()
+    {
+        _deviceStates = SpbService.GetDeviceStates();
+        Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(_deviceStates));
+    }
+
+    private void GetKnownMetrics()
+    {
+        _knownMetrics = SpbService.GetKnownMetrics();
+        Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(_knownMetrics));
+    }
+
+}

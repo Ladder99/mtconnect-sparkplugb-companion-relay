@@ -40,11 +40,11 @@ namespace mtc_spb_relay
                     
                     services.AddSingleton(sp => new SparkplugB.ClientServiceOptions()
                     {
-                        BrokerAddress = "10.20.30.114",
+                        BrokerAddress = "10.20.30.112",
                         BrokerPort = 1883,
                         UseTls = false,
-                        Username = "admin",
-                        Password = "password",
+                        Username = "",
+                        Password = "",
                         ClientId = Guid.NewGuid().ToString()
                     });
                     

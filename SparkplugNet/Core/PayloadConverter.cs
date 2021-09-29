@@ -110,15 +110,18 @@ namespace SparkplugNet.Core
         // ReSharper disable once StyleCop.SA1650
         public static VersionBData.Payload ConvertVersionBPayload(VersionBProtoBuf.ProtoBufPayload payload)
         {
-            return new VersionBData.Payload
+            var p =  new VersionBData.Payload
             {
                 Body = payload.Body,
                 Details = payload.Details,
-                Metrics = payload.Metrics.Select(ConvertVersionBMetric).ToList(),
+                //TODO: something jacked up here in webassembly - cmisztur
+                //Metrics = payload.Metrics.Select(ConvertVersionBMetric).ToList(),
                 Seq = payload.Seq,
                 Timestamp = payload.Timestamp,
                 Uuid = payload.Uuid
             };
+
+            return p;
         }
 
         /// <summary>
@@ -918,7 +921,7 @@ namespace SparkplugNet.Core
         /// <returns>The <see cref="VersionBData.Metric"/>.</returns>
         private static VersionBData.Metric ConvertVersionBMetric(VersionBProtoBuf.ProtoBufPayload.Metric metric)
         {
-            return new VersionBData.Metric
+            var m = new VersionBData.Metric
             {
                 DoubleValue = metric.DoubleValue,
                 Alias = metric.Alias,
@@ -944,6 +947,8 @@ namespace SparkplugNet.Core
                 TemplateValue = ConvertVersionBTemplate(metric.TemplateValue),
                 ValueCase = ConvertVersionBDataTypeMetric(metric.ValueCase)
             };
+
+            return m;
         }
 
         /// <summary>
